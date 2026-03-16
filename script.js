@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // ESRN 135 - Sistema de Gestión de Fotocopias
-// Autor: Área TIC · Firebase v8 + Vanilla JS
+// Firebase v8 + Vanilla JS
 // ═══════════════════════════════════════════════════════════════
 
 // ──────────────────────────────────────────────────────────────
@@ -22,35 +22,60 @@ const auth = firebase.auth();
 const db   = firebase.firestore();
 
 // ──────────────────────────────────────────────────────────────
-// CONSTANTE: UMBRAL DE DEUDOR CRÓNICO
-// NOTA FUTURA: Cambiá este número para ajustar el límite
-// a partir del cual un usuario se considera deudor crónico.
+// CONSTANTE: UMBRAL DEUDOR CRÓNICO
+// NOTA FUTURA: Cambiá este número para ajustar el límite.
 // ──────────────────────────────────────────────────────────────
 const UMBRAL_DEUDOR_CRONICO = 2000;
 
-// Variable global para guardar el nombre del usuario seleccionado
-// en el buscador (necesario para registrar el abono).
-let usuarioSeleccionado = null;
+// Variables globales de estado
+let usuarioSeleccionado = null; // Usuario activo en el buscador
+let docEditandoId       = null; // ID del documento que se está editando
+
 
 // ═══════════════════════════════════════════════════════════════
-// 1. AUTENTICACIÓN
+// 1. TEMA CLARO / OSCURO
 // ═══════════════════════════════════════════════════════════════
 
-// Observador de estado: si el usuario ya está logueado al cargar
-// la página, mostramos la app directamente sin pedir contraseña.
+// Aplica el tema guardado al cargar la página (antes del login)
+(function aplicarTemaGuardado() {
+    const temaGuardado = localStorage.getItem('tema') || 'dark';
+    document.documentElement.setAttribute('data-theme', temaGuardado);
+    actualizarIconoTema(temaGuardado);
+})();
+
+// Alterna entre claro y oscuro, y guarda la preferencia
+// NOTA FUTURA: El tema se guarda en localStorage del navegador.
+// Si querés que siempre arranque en un tema fijo, cambiá 'dark' arriba.
+function toggleTheme() {
+    const html         = document.documentElement;
+    const temaActual   = html.getAttribute('data-theme');
+    const nuevoTema    = temaActual === 'dark' ? 'light' : 'dark';
+
+    html.setAttribute('data-theme', nuevoTema);
+    localStorage.setItem('tema', nuevoTema);
+    actualizarIconoTema(nuevoTema);
+}
+
+function actualizarIconoTema(tema) {
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.textContent = tema === 'dark' ? '☀️' : '🌙';
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// 2. AUTENTICACIÓN
+// ═══════════════════════════════════════════════════════════════
+
+// Si el usuario ya está logueado al abrir la página, entra directo
 auth.onAuthStateChanged((user) => {
-    if (user) {
-        mostrarApp();
-    }
+    if (user) mostrarApp();
 });
 
-// Login con email y contraseña
 document.getElementById('login-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const email    = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     const errorEl  = document.getElementById('login-error');
-
     errorEl.textContent = "";
 
     auth.signInWithEmailAndPassword(email, password)
@@ -59,62 +84,57 @@ document.getElementById('login-form').addEventListener('submit', (e) => {
         });
 });
 
-// Cerrar sesión
 document.getElementById('logout-btn').addEventListener('click', () => {
     auth.signOut();
-    document.getElementById('app-container').style.display = 'none';
+    document.getElementById('app-container').style.display  = 'none';
     document.getElementById('login-container').style.display = 'flex';
 });
 
-// Muestra la aplicación y arranca todas las funciones
 function mostrarApp() {
-    document.getElementById('login-container').style.display  = 'none';
-    document.getElementById('app-container').style.display    = 'block';
+    document.getElementById('login-container').style.display = 'none';
+    document.getElementById('app-container').style.display   = 'block';
     iniciarTabs();
     calcularCajaDelDia();
     cargarHistorialGeneral();
     calcularEstadisticas();
     notificarDeudoresCronicos();
+    iniciarBuscadorHistorial();
 }
 
+
 // ═══════════════════════════════════════════════════════════════
-// 2. NAVEGACIÓN POR TABS
+// 3. NAVEGACIÓN POR TABS
 // ═══════════════════════════════════════════════════════════════
 function iniciarTabs() {
-    const tabs    = document.querySelectorAll('.tab-btn');
+    const tabs      = document.querySelectorAll('.tab-btn');
     const secciones = document.querySelectorAll('.tab-content');
 
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
             tabs.forEach(t => t.classList.remove('active'));
             secciones.forEach(s => s.classList.remove('active'));
-
             tab.classList.add('active');
             document.getElementById(tab.dataset.tab).classList.add('active');
         });
     });
 }
 
+
 // ═══════════════════════════════════════════════════════════════
-// 3. REGISTRO DE MOVIMIENTOS
+// 4. REGISTRO DE MOVIMIENTOS
 // ═══════════════════════════════════════════════════════════════
 
-// Setea el monto desde los botones de precio rápido
 function setAmount(val) {
     document.getElementById('custom-amount').value = val;
 }
 
-// ── AUTOCOMPLETADO DE NOMBRES ──
-// Lee los nombres registrados en Firestore y sugiere coincidencias
-// al escribir en el campo de nombre.
+// ── Autocompletado de nombres al escribir ──
 document.getElementById('user-name').addEventListener('input', async (e) => {
     const query = e.target.value.trim().toLowerCase();
-    const lista  = document.getElementById('autocomplete-list');
+    const lista = document.getElementById('autocomplete-list');
     lista.innerHTML = "";
-
     if (query.length < 2) return;
 
-    // Busca todos los documentos cuyo userName empiece con lo que se escribe
     const snapshot = await db.collection("fotocopias")
         .orderBy("userName")
         .startAt(query)
@@ -122,7 +142,6 @@ document.getElementById('user-name').addEventListener('input', async (e) => {
         .limit(6)
         .get();
 
-    // Construye lista sin duplicados
     const vistos = new Set();
     snapshot.forEach(doc => {
         const nombre = doc.data().userName;
@@ -132,7 +151,7 @@ document.getElementById('user-name').addEventListener('input', async (e) => {
             const li = document.createElement('li');
             li.innerHTML = `${nombre} <span>${curso}</span>`;
             li.addEventListener('click', () => {
-                document.getElementById('user-name').value  = nombre;
+                document.getElementById('user-name').value   = nombre;
                 document.getElementById('user-course').value = curso;
                 lista.innerHTML = "";
             });
@@ -141,22 +160,20 @@ document.getElementById('user-name').addEventListener('input', async (e) => {
     });
 });
 
-// Cierra el autocompletado al hacer clic fuera
 document.addEventListener('click', (e) => {
     if (!e.target.closest('#user-name') && !e.target.closest('#autocomplete-list')) {
         document.getElementById('autocomplete-list').innerHTML = "";
     }
 });
 
-// ── GUARDAR MOVIMIENTO ──
+// ── Guardar nuevo movimiento ──
 document.getElementById('copy-form').addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const nombre = document.getElementById('user-name').value.trim().toLowerCase();
     const monto  = parseFloat(document.getElementById('custom-amount').value);
 
-    // Validaciones básicas
-    if (!nombre) { alert("Ingresá el nombre del usuario."); return; }
+    if (!nombre)               { alert("Ingresá el nombre del usuario."); return; }
     if (isNaN(monto) || monto <= 0) { alert("Ingresá un monto válido."); return; }
 
     const datos = {
@@ -166,6 +183,8 @@ document.getElementById('copy-form').addEventListener('submit', async (e) => {
         amount:     monto,
         // NOTA FUTURA: payMethod puede ser: "Debe", "Efectivo", "Transferencia", "Abono"
         payMethod:  document.getElementById('pay-method').value,
+        // NOTA FUTURA: El campo "nota" es opcional; queda vacío si no se completa
+        nota:       document.getElementById('nota-registro').value.trim(),
         fecha:      firebase.firestore.FieldValue.serverTimestamp()
     };
 
@@ -173,15 +192,15 @@ document.getElementById('copy-form').addEventListener('submit', async (e) => {
         await db.collection("fotocopias").add(datos);
         alert("✅ Movimiento registrado.");
         document.getElementById('copy-form').reset();
-        calcularCajaDelDia(); // Actualiza caja al instante
+        calcularCajaDelDia();
     } catch (error) {
         alert("Error al guardar: " + error.message);
     }
 });
 
+
 // ═══════════════════════════════════════════════════════════════
-// 4. CAJA DEL DÍA
-// Suma todos los ingresos reales del día (excluye las deudas).
+// 5. CAJA DEL DÍA
 // ═══════════════════════════════════════════════════════════════
 function calcularCajaDelDia() {
     const hoy = new Date();
@@ -190,9 +209,7 @@ function calcularCajaDelDia() {
     db.collection("fotocopias")
         .where("fecha", ">=", hoy)
         .onSnapshot((snapshot) => {
-            let efectivo      = 0;
-            let transferencia = 0;
-            let abonos        = 0;
+            let efectivo = 0, transferencia = 0, abonos = 0;
 
             snapshot.forEach(doc => {
                 const d = doc.data();
@@ -202,15 +219,15 @@ function calcularCajaDelDia() {
             });
 
             const total = efectivo + transferencia + abonos;
-            document.getElementById('caja-dia').textContent  = `$${total.toLocaleString('es-AR')}`;
+            document.getElementById('caja-dia').textContent    = `$${total.toLocaleString('es-AR')}`;
             document.getElementById('caja-detalle').textContent =
                 `Efectivo: $${efectivo} · Transf.: $${transferencia} · Abonos: $${abonos}`;
         });
 }
 
+
 // ═══════════════════════════════════════════════════════════════
-// 5. BUSCADOR DE USUARIOS
-// Busca usuarios por nombre y muestra su saldo + historial.
+// 6. BUSCADOR DE USUARIOS
 // ═══════════════════════════════════════════════════════════════
 document.getElementById('search-input').addEventListener('input', async (e) => {
     const query      = e.target.value.trim().toLowerCase();
@@ -223,7 +240,6 @@ document.getElementById('search-input').addEventListener('input', async (e) => {
 
     if (query.length < 2) return;
 
-    // Busca coincidencias de nombre en Firestore
     const snapshot = await db.collection("fotocopias")
         .orderBy("userName")
         .startAt(query)
@@ -231,7 +247,7 @@ document.getElementById('search-input').addEventListener('input', async (e) => {
         .get();
 
     if (snapshot.empty) {
-        resultados.innerHTML = `<p class="empty-msg">No se encontraron usuarios con ese nombre.</p>`;
+        resultados.innerHTML = `<p class="empty-msg">No se encontraron usuarios.</p>`;
         return;
     }
 
@@ -246,7 +262,6 @@ document.getElementById('search-input').addEventListener('input', async (e) => {
         if (d.payMethod === "Abono") usuarios[d.userName].deuda -= Number(d.amount);
     });
 
-    // Muestra cada usuario encontrado como tarjeta clickeable
     Object.entries(usuarios).forEach(([nombre, info]) => {
         const deuda = Math.max(0, info.deuda);
         const div   = document.createElement('div');
@@ -260,14 +275,12 @@ document.getElementById('search-input').addEventListener('input', async (e) => {
                 $${deuda.toLocaleString('es-AR')}
             </div>
         `;
-        // Al hacer clic en la tarjeta, carga el perfil completo
         div.addEventListener('click', () => cargarPerfilUsuario(nombre, info.curso, deuda));
         resultados.appendChild(div);
     });
 });
 
-// ── CARGAR PERFIL DE USUARIO ──
-// Muestra el historial completo del usuario y el formulario de abono.
+// ── Cargar perfil completo de un usuario ──
 function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
     usuarioSeleccionado = { nombre, curso };
 
@@ -275,16 +288,14 @@ function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
     document.getElementById('profile-name').textContent   = nombre.toUpperCase();
     document.getElementById('profile-curso').textContent  = curso || "Sin curso";
 
-    const saldoEl    = document.getElementById('profile-saldo');
-    const alertaEl   = document.getElementById('alerta-deudor');
+    const saldoEl  = document.getElementById('profile-saldo');
+    const alertaEl = document.getElementById('alerta-deudor');
 
     saldoEl.textContent = `$${saldoDeuda.toLocaleString('es-AR')}`;
     saldoEl.className   = 'profile-saldo ' + (saldoDeuda > 0 ? '' : 'verde');
-
-    // Mostrar alerta si supera el umbral de deudor crónico
     alertaEl.style.display = saldoDeuda >= UMBRAL_DEUDOR_CRONICO ? 'block' : 'none';
 
-    // Cargar el historial del usuario en tiempo real
+    // Escucha en tiempo real los movimientos del usuario
     db.collection("fotocopias")
         .where("userName", "==", nombre)
         .orderBy("fecha", "desc")
@@ -297,7 +308,7 @@ function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
                 return;
             }
 
-            // Recalcula saldo en tiempo real con cada actualización
+            // Recalcula saldo en tiempo real
             let deudaActual = 0;
             snapshot.forEach(doc => {
                 const d = doc.data();
@@ -306,100 +317,159 @@ function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
             });
             deudaActual = Math.max(0, deudaActual);
 
-            saldoEl.textContent = `$${deudaActual.toLocaleString('es-AR')}`;
-            saldoEl.className   = 'profile-saldo ' + (deudaActual > 0 ? '' : 'verde');
+            saldoEl.textContent    = `$${deudaActual.toLocaleString('es-AR')}`;
+            saldoEl.className      = 'profile-saldo ' + (deudaActual > 0 ? '' : 'verde');
             alertaEl.style.display = deudaActual >= UMBRAL_DEUDOR_CRONICO ? 'block' : 'none';
 
-            // Renderiza cada movimiento
             snapshot.forEach(doc => {
-                const d = doc.data();
-                const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
-                const cssBadge = obtenerCSS(d.payMethod);
+                const d      = doc.data();
+                const fecha  = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
+                const css    = obtenerCSS(d.payMethod);
+                const esAbono = d.payMethod === 'Abono';
 
                 const div = document.createElement('div');
                 div.className = 'mov-item';
                 div.innerHTML = `
                     <div>
                         <div class="mov-fecha">${fecha}</div>
+                        ${d.nota ? `<div style="font-size:0.72rem; color:var(--text-dim); font-style:italic;">${d.nota}</div>` : ''}
                     </div>
                     <div style="display:flex; gap:8px; align-items:center;">
                         <span class="mov-monto" style="color: ${d.payMethod === 'Debe' ? 'var(--red)' : 'var(--green)'}">
-                            ${d.payMethod === 'Abono' ? '-' : ''}$${Number(d.amount).toLocaleString('es-AR')}
+                            ${esAbono ? '-' : ''}$${Number(d.amount).toLocaleString('es-AR')}
                         </span>
-                        <span class="mov-metodo badge ${cssBadge}">${d.payMethod}</span>
+                        <span class="mov-metodo badge ${css}">${d.payMethod}</span>
                     </div>
                 `;
                 container.appendChild(div);
             });
         });
 
-    // Scroll suave hasta el perfil
     document.getElementById('user-profile').scrollIntoView({ behavior: 'smooth' });
 }
 
-// ── REGISTRAR ABONO PARCIAL ──
-// Crea un nuevo movimiento de tipo "Abono" con monto negativo para
-// descontar de la deuda del usuario seleccionado.
+// ── Registrar abono parcial ──
 async function registrarAbono() {
-    if (!usuarioSeleccionado) {
-        alert("Seleccioná un usuario primero.");
-        return;
-    }
+    if (!usuarioSeleccionado) { alert("Seleccioná un usuario primero."); return; }
 
-    const monto   = parseFloat(document.getElementById('abono-monto').value);
-    const metodo  = document.getElementById('abono-metodo').value;
+    const monto  = parseFloat(document.getElementById('abono-monto').value);
+    const metodo = document.getElementById('abono-metodo').value;
 
-    if (isNaN(monto) || monto <= 0) {
-        alert("Ingresá un monto válido para el abono.");
-        return;
-    }
-
+    if (isNaN(monto) || monto <= 0) { alert("Ingresá un monto válido."); return; }
     if (!confirm(`¿Confirmás un abono de $${monto} para ${usuarioSeleccionado.nombre.toUpperCase()}?`)) return;
 
     const datos = {
-        userName:   usuarioSeleccionado.nombre,
-        userCourse: usuarioSeleccionado.curso || "",
-        userRole:   "Alumno",
-        amount:     monto,
-        // NOTA FUTURA: Los abonos siempre se guardan con payMethod = "Abono"
-        // y se descuentan de la deuda en el cálculo de saldo.
-        payMethod:  "Abono",
-        abonoMetodo: metodo, // Guarda si fue en efectivo o transferencia
-        fecha:      firebase.firestore.FieldValue.serverTimestamp()
+        userName:    usuarioSeleccionado.nombre,
+        userCourse:  usuarioSeleccionado.curso || "",
+        userRole:    "Alumno",
+        amount:      monto,
+        // NOTA FUTURA: Los abonos reducen la deuda automáticamente en el cálculo de saldo
+        payMethod:   "Abono",
+        abonoMetodo: metodo,
+        nota:        `Abono en ${metodo}`,
+        fecha:       firebase.firestore.FieldValue.serverTimestamp()
     };
 
     try {
         await db.collection("fotocopias").add(datos);
         document.getElementById('abono-monto').value = "";
-        alert(`✅ Abono de $${monto} registrado correctamente.`);
+        alert(`✅ Abono de $${monto} registrado.`);
     } catch (error) {
-        alert("Error al registrar abono: " + error.message);
+        alert("Error: " + error.message);
     }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// 6. HISTORIAL GENERAL CON FILTROS
-// ═══════════════════════════════════════════════════════════════
-function cargarHistorialGeneral(filtros = {}) {
-    let consulta = db.collection("fotocopias").orderBy("fecha", "desc").limit(50);
 
-    // NOTA FUTURA: Para cambiar el límite de registros mostrados,
-    // cambiá el número en .limit(50) de arriba.
+// ═══════════════════════════════════════════════════════════════
+// 7. RESUMEN IMPRIMIBLE / WHATSAPP
+// Genera una vista limpia del historial del usuario seleccionado
+// lista para imprimir o copiar y mandar por WhatsApp.
+// ═══════════════════════════════════════════════════════════════
+async function imprimirResumen() {
+    if (!usuarioSeleccionado) { alert("Seleccioná un usuario primero."); return; }
+
+    const nombre   = usuarioSeleccionado.nombre;
+    const snapshot = await db.collection("fotocopias")
+        .where("userName", "==", nombre)
+        .orderBy("fecha", "desc")
+        .get();
+
+    let deuda = 0;
+    let filas = "";
+
+    snapshot.forEach(doc => {
+        const d     = doc.data();
+        const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
+        if (d.payMethod === "Debe")  deuda += Number(d.amount);
+        if (d.payMethod === "Abono") deuda -= Number(d.amount);
+
+        filas += `
+            <tr>
+                <td>${fecha}</td>
+                <td>${d.payMethod}</td>
+                <td>$${Number(d.amount).toLocaleString('es-AR')}</td>
+                <td>${d.nota || ''}</td>
+            </tr>
+        `;
+    });
+
+    deuda = Math.max(0, deuda);
+
+    // Llena el área de impresión
+    document.getElementById('print-area').innerHTML = `
+        <div class="print-title">ESRN 135 — Resumen de cuenta</div>
+        <div class="print-subtitle">Generado el ${new Date().toLocaleDateString('es-AR')}</div>
+        <div class="print-saldo">Alumno: ${nombre.toUpperCase()} | Saldo adeudado: $${deuda.toLocaleString('es-AR')}</div>
+        <table class="print-table">
+            <thead>
+                <tr><th>Fecha</th><th>Método</th><th>Monto</th><th>Nota</th></tr>
+            </thead>
+            <tbody>${filas}</tbody>
+        </table>
+        <p style="margin-top:16px; font-size:0.8rem; color:#555;">
+            Alias: esrn135 · WhatsApp: 2920-298994
+        </p>
+    `;
+
+    window.print();
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// 8. HISTORIAL GENERAL CON FILTROS + BUSCADOR
+// ═══════════════════════════════════════════════════════════════
+
+// Buscador en tiempo real dentro del historial
+function iniciarBuscadorHistorial() {
+    document.getElementById('historial-search').addEventListener('input', (e) => {
+        const query = e.target.value.trim().toLowerCase();
+        // Filtra las filas visibles en la tabla sin nueva consulta a Firestore
+        const filas = document.querySelectorAll('#cuerpo-tabla tr');
+        filas.forEach(fila => {
+            const texto = fila.textContent.toLowerCase();
+            fila.style.display = texto.includes(query) ? '' : 'none';
+        });
+    });
+}
+
+function cargarHistorialGeneral(filtros = {}) {
+    let consulta = db.collection("fotocopias").orderBy("fecha", "desc").limit(80);
+    // NOTA FUTURA: Para mostrar más registros, cambiá el número en .limit(80)
+
+    if (filtros.metodo) {
+        consulta = db.collection("fotocopias")
+            .where("payMethod", "==", filtros.metodo)
+            .orderBy("fecha", "desc")
+            .limit(80);
+    }
 
     if (filtros.desde) {
         consulta = consulta.where("fecha", ">=", new Date(filtros.desde));
     }
     if (filtros.hasta) {
-        // Agrega un día para incluir registros del día "hasta"
         const hastaFin = new Date(filtros.hasta);
         hastaFin.setDate(hastaFin.getDate() + 1);
         consulta = consulta.where("fecha", "<=", hastaFin);
-    }
-    if (filtros.metodo) {
-        consulta = db.collection("fotocopias")
-            .where("payMethod", "==", filtros.metodo)
-            .orderBy("fecha", "desc")
-            .limit(50);
     }
 
     consulta.onSnapshot((snapshot) => {
@@ -407,7 +477,7 @@ function cargarHistorialGeneral(filtros = {}) {
         tbody.innerHTML = "";
 
         if (snapshot.empty) {
-            tbody.innerHTML = `<tr><td colspan="5" class="empty-msg">Sin registros para mostrar.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="empty-msg">Sin registros para mostrar.</td></tr>`;
             return;
         }
 
@@ -422,21 +492,30 @@ function cargarHistorialGeneral(filtros = {}) {
             tr.innerHTML = `
                 <td>${fecha}</td>
                 <td>${d.userName ? d.userName.toUpperCase() : '---'}</td>
-                <td style="font-family: var(--font-mono);">$${Number(d.amount).toLocaleString('es-AR')}</td>
+                <td style="font-family:var(--font-mono);">$${Number(d.amount).toLocaleString('es-AR')}</td>
                 <td><span class="badge ${css}">${d.payMethod}</span></td>
+                <td class="nota-cell" title="${d.nota || ''}">${d.nota || '—'}</td>
                 <td>
-                    ${esDeuda
-                        ? `<button class="btn-pagar" onclick="saldarDeuda('${id}')">✅ Pagar</button>`
-                        : '—'
-                    }
+                    <div class="acciones-cell">
+                        ${esDeuda ? `<button class="btn-pagar" onclick="saldarDeuda('${id}')">✅ Pagar</button>` : ''}
+                        <button class="btn-editar"   onclick="abrirEdicion('${id}')">✏️ Editar</button>
+                        <button class="btn-eliminar" onclick="eliminarRegistro('${id}')">🗑️ Borrar</button>
+                    </div>
                 </td>
             `;
             tbody.appendChild(tr);
         });
+
+        // Reaplica el buscador si hay algo escrito
+        const query = document.getElementById('historial-search').value.trim().toLowerCase();
+        if (query) {
+            document.querySelectorAll('#cuerpo-tabla tr').forEach(fila => {
+                fila.style.display = fila.textContent.toLowerCase().includes(query) ? '' : 'none';
+            });
+        }
     });
 }
 
-// ── APLICAR FILTROS AL HISTORIAL ──
 function aplicarFiltros() {
     const filtros = {
         desde:  document.getElementById('filtro-desde').value,
@@ -446,33 +525,98 @@ function aplicarFiltros() {
     cargarHistorialGeneral(filtros);
 }
 
-// ── SALDAR DEUDA COMPLETA ──
-// Cambia el estado del registro de "Debe" a "Efectivo"
-// (pago completo de ese movimiento puntual).
+// ── Saldar deuda completa (cambia a Efectivo) ──
 function saldarDeuda(docId) {
     if (!confirm("¿Confirmás que este movimiento fue pagado completamente?")) return;
-
     db.collection("fotocopias").doc(docId).update({ payMethod: "Efectivo" })
         .then(() => alert("✅ Deuda saldada."))
         .catch(err => alert("Error: " + err.message));
 }
 
+// ── Eliminar registro ──
+// NOTA FUTURA: El borrado es permanente. No hay papelera de reciclaje.
+function eliminarRegistro(docId) {
+    if (!confirm("⚠️ ¿Estás seguro que querés borrar este registro?\nEsta acción no se puede deshacer.")) return;
+    db.collection("fotocopias").doc(docId).delete()
+        .then(() => alert("🗑️ Registro eliminado."))
+        .catch(err => alert("Error: " + err.message));
+}
+
+
 // ═══════════════════════════════════════════════════════════════
-// 7. EXPORTAR CSV
-// Descarga todos los movimientos como archivo Excel-compatible.
+// 9. EDITAR REGISTRO
+// ═══════════════════════════════════════════════════════════════
+
+// Abre el modal y carga los datos actuales del registro
+async function abrirEdicion(docId) {
+    docEditandoId = docId;
+
+    try {
+        const doc  = await db.collection("fotocopias").doc(docId).get();
+        const data = doc.data();
+
+        document.getElementById('edit-nombre').value  = data.userName   || '';
+        document.getElementById('edit-curso').value   = data.userCourse || '';
+        document.getElementById('edit-monto').value   = data.amount     || '';
+        document.getElementById('edit-metodo').value  = data.payMethod  || 'Debe';
+        document.getElementById('edit-nota').value    = data.nota       || '';
+
+        document.getElementById('modal-editar').style.display = 'flex';
+    } catch (error) {
+        alert("Error al cargar el registro: " + error.message);
+    }
+}
+
+// Guarda los cambios del modal al documento en Firestore
+async function guardarEdicion() {
+    if (!docEditandoId) return;
+
+    const nombre = document.getElementById('edit-nombre').value.trim().toLowerCase();
+    const monto  = parseFloat(document.getElementById('edit-monto').value);
+
+    if (!nombre)               { alert("El nombre no puede estar vacío."); return; }
+    if (isNaN(monto) || monto <= 0) { alert("Ingresá un monto válido."); return; }
+
+    const cambios = {
+        userName:   nombre,
+        userCourse: document.getElementById('edit-curso').value.trim(),
+        amount:     monto,
+        payMethod:  document.getElementById('edit-metodo').value,
+        nota:       document.getElementById('edit-nota').value.trim()
+    };
+
+    try {
+        await db.collection("fotocopias").doc(docEditandoId).update(cambios);
+        alert("✅ Registro actualizado.");
+        cerrarModal();
+    } catch (error) {
+        alert("Error al guardar: " + error.message);
+    }
+}
+
+function cerrarModal() {
+    document.getElementById('modal-editar').style.display = 'none';
+    docEditandoId = null;
+}
+
+// Cierra el modal al hacer clic en el fondo oscuro
+document.getElementById('modal-editar').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('modal-editar')) cerrarModal();
+});
+
+
+// ═══════════════════════════════════════════════════════════════
+// 10. EXPORTAR CSV
 // ═══════════════════════════════════════════════════════════════
 async function exportarCSV() {
     try {
         const snapshot = await db.collection("fotocopias").orderBy("fecha", "desc").get();
-
-        // BOM UTF-8 para que Excel lea correctamente los acentos
-        let csv = "\ufeffFecha,Nombre,Curso,Monto,Metodo\n";
+        let csv = "\ufeffFecha,Nombre,Curso,Monto,Metodo,Nota\n";
 
         snapshot.forEach(doc => {
             const d     = doc.data();
             const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
-            // Escapamos comas dentro de los campos por las dudas
-            csv += `${fecha},"${d.userName || ''}","${d.userCourse || ''}",${d.amount || 0},"${d.payMethod || ''}"\n`;
+            csv += `${fecha},"${d.userName || ''}","${d.userCourse || ''}",${d.amount || 0},"${d.payMethod || ''}","${d.nota || ''}"\n`;
         });
 
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -485,43 +629,35 @@ async function exportarCSV() {
     }
 }
 
+
 // ═══════════════════════════════════════════════════════════════
-// 8. ESTADÍSTICAS MENSUALES
+// 11. ESTADÍSTICAS MENSUALES
 // ═══════════════════════════════════════════════════════════════
 function calcularEstadisticas() {
-    const ahora    = new Date();
+    const ahora     = new Date();
     const primerDia = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
     const nombreMes = ahora.toLocaleString('es-AR', { month: 'long', year: 'numeric' });
 
     document.getElementById('stats-periodo').textContent = `Período: ${nombreMes}`;
 
-    // Escucha en tiempo real todos los movimientos del mes actual
     db.collection("fotocopias")
         .where("fecha", ">=", primerDia)
         .onSnapshot((snapshot) => {
             let recaudadoMes = 0;
-            const saldosPorUsuario = {};
+            const saldos     = {};
 
             snapshot.forEach(doc => {
                 const d = doc.data();
+                if (d.payMethod !== "Debe") recaudadoMes += Number(d.amount);
 
-                // Recaudación del mes (excluyendo deudas)
-                if (d.payMethod !== "Debe") {
-                    recaudadoMes += Number(d.amount);
-                }
-
-                // Saldo acumulado por usuario para detectar deudores crónicos
-                if (!saldosPorUsuario[d.userName]) {
-                    saldosPorUsuario[d.userName] = { deuda: 0, curso: d.userCourse || "" };
-                }
-                if (d.payMethod === "Debe")  saldosPorUsuario[d.userName].deuda += Number(d.amount);
-                if (d.payMethod === "Abono") saldosPorUsuario[d.userName].deuda -= Number(d.amount);
+                if (!saldos[d.userName]) saldos[d.userName] = { deuda: 0, curso: d.userCourse || "" };
+                if (d.payMethod === "Debe")  saldos[d.userName].deuda += Number(d.amount);
+                if (d.payMethod === "Abono") saldos[d.userName].deuda -= Number(d.amount);
             });
 
             document.getElementById('stat-mes').textContent = `$${recaudadoMes.toLocaleString('es-AR')}`;
 
-            // Deudores crónicos (saldo mayor al umbral definido arriba)
-            const cronicos = Object.entries(saldosPorUsuario)
+            const cronicos = Object.entries(saldos)
                 .filter(([, info]) => info.deuda >= UMBRAL_DEUDOR_CRONICO)
                 .sort((a, b) => b[1].deuda - a[1].deuda);
 
@@ -548,7 +684,7 @@ function calcularEstadisticas() {
             }
         });
 
-    // Deuda total acumulada (histórico completo, no solo el mes)
+    // Deuda total histórica
     db.collection("fotocopias")
         .where("payMethod", "in", ["Debe", "Abono"])
         .onSnapshot((snapshot) => {
@@ -562,23 +698,23 @@ function calcularEstadisticas() {
                 `$${Math.max(0, totalDeuda).toLocaleString('es-AR')}`;
         });
 
-    // Recaudación del día de hoy (se reutiliza caja-dia del tab 1)
-    // Conectamos el valor al stat también
+    // Recaudación de hoy
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
     db.collection("fotocopias")
-        .where("fecha", ">=", (() => { const h = new Date(); h.setHours(0,0,0,0); return h; })())
+        .where("fecha", ">=", hoy)
         .onSnapshot((snapshot) => {
-            let hoy = 0;
+            let recHoy = 0;
             snapshot.forEach(doc => {
-                if (doc.data().payMethod !== "Debe") hoy += Number(doc.data().amount);
+                if (doc.data().payMethod !== "Debe") recHoy += Number(doc.data().amount);
             });
-            document.getElementById('stat-hoy').textContent = `$${hoy.toLocaleString('es-AR')}`;
+            document.getElementById('stat-hoy').textContent = `$${recHoy.toLocaleString('es-AR')}`;
         });
 }
 
+
 // ═══════════════════════════════════════════════════════════════
-// 9. NOTIFICACIÓN DE DEUDORES CRÓNICOS AL CARGAR
-// Al iniciar la app, muestra un aviso si hay deudores con saldo
-// mayor al umbral definido.
+// 12. NOTIFICACIÓN DE DEUDORES CRÓNICOS AL INICIAR
 // ═══════════════════════════════════════════════════════════════
 async function notificarDeudoresCronicos() {
     const snapshot = await db.collection("fotocopias")
@@ -593,26 +729,24 @@ async function notificarDeudoresCronicos() {
         if (d.payMethod === "Abono") saldos[d.userName] -= Number(d.amount);
     });
 
-    const cronicos = Object.entries(saldos)
-        .filter(([, deuda]) => deuda >= UMBRAL_DEUDOR_CRONICO);
+    const cronicos = Object.entries(saldos).filter(([, deuda]) => deuda >= UMBRAL_DEUDOR_CRONICO);
 
     if (cronicos.length > 0) {
         const nombres = cronicos.map(([n]) => n.toUpperCase()).join(", ");
-        console.warn(`⚠️ Deudores crónicos detectados: ${nombres}`);
-        // NOTA FUTURA: Podés reemplazar el console.warn por un toast visual
-        // o modal si querés que la notificación sea más visible.
+        // NOTA FUTURA: Para desactivar este aviso al iniciar, comentá las líneas de setTimeout abajo
         setTimeout(() => {
             alert(`⚠️ Hay ${cronicos.length} deudor(es) crónico(s):\n\n${nombres}\n\nRevisá la pestaña Estadísticas.`);
         }, 1000);
     }
 }
 
+
 // ═══════════════════════════════════════════════════════════════
-// 10. UTILIDADES
+// 13. UTILIDADES
 // ═══════════════════════════════════════════════════════════════
 
-// Devuelve la clase CSS según el método de pago para los badges
-// NOTA FUTURA: Si agregás un nuevo método de pago, añadí su caso acá.
+// Devuelve la clase CSS para el badge según método de pago
+// NOTA FUTURA: Si agregás un nuevo método, añadí su caso acá
 function obtenerCSS(metodo) {
     switch (metodo) {
         case "Debe":          return "metodo-debe";

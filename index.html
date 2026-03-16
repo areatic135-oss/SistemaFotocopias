@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,6 +14,50 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 </head>
 <body>
+
+    <!-- ══════════════════════════════════════════
+         MODAL: EDITAR REGISTRO
+         Se abre al hacer clic en "Editar" en el historial
+    ══════════════════════════════════════════ -->
+    <div id="modal-editar" class="modal-overlay" style="display:none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h4>✏️ Editar Registro</h4>
+                <button onclick="cerrarModal()" class="modal-close">✕</button>
+            </div>
+            <div class="field-group">
+                <label>Nombre y Apellido</label>
+                <input type="text" id="edit-nombre" placeholder="Nombre y Apellido">
+            </div>
+            <div class="form-row">
+                <div class="field-group">
+                    <label>Curso</label>
+                    <input type="text" id="edit-curso" placeholder="Ej: 4to 2da">
+                </div>
+                <div class="field-group">
+                    <label>Monto</label>
+                    <input type="number" id="edit-monto" placeholder="$" min="0">
+                </div>
+            </div>
+            <div class="field-group">
+                <label>Método de pago</label>
+                <select id="edit-metodo">
+                    <option value="Debe">📝 Deuda</option>
+                    <option value="Efectivo">💵 Efectivo</option>
+                    <option value="Transferencia">📱 Transferencia</option>
+                    <option value="Abono">✅ Abono</option>
+                </select>
+            </div>
+            <div class="field-group">
+                <label>Nota / Observación</label>
+                <input type="text" id="edit-nota" placeholder="Opcional...">
+            </div>
+            <div class="modal-actions">
+                <button onclick="cerrarModal()" class="btn-cancelar">Cancelar</button>
+                <button onclick="guardarEdicion()" class="btn-main">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
 
     <!-- ══════════════════════════════════════════
          PANTALLA DE LOGIN
@@ -41,7 +85,7 @@
     </div>
 
     <!-- ══════════════════════════════════════════
-         APLICACIÓN PRINCIPAL (visible tras login)
+         APLICACIÓN PRINCIPAL
     ══════════════════════════════════════════ -->
     <div id="app-container" style="display:none;">
 
@@ -51,7 +95,11 @@
                 <span class="top-logo">📋 ESRN 135</span>
                 <span class="top-subtitle">Control de Fotocopias</span>
             </div>
-            <button id="logout-btn" class="btn-logout">Salir</button>
+            <div class="top-bar-actions">
+                <!-- NOTA FUTURA: El tema elegido se guarda y se recuerda en el navegador -->
+                <button id="theme-toggle" class="btn-theme" title="Cambiar tema claro/oscuro" onclick="toggleTheme()">🌙</button>
+                <button id="logout-btn" class="btn-logout">Salir</button>
+            </div>
         </header>
 
         <!-- TABS DE NAVEGACIÓN -->
@@ -74,7 +122,6 @@
                 </div>
 
                 <form id="copy-form">
-                    <!-- Nombre con autocompletado -->
                     <div class="field-group">
                         <label>Nombre y Apellido *</label>
                         <input type="text" id="user-name" placeholder="Ej: Juan Pérez" autocomplete="off" required>
@@ -105,7 +152,7 @@
                         </select>
                     </div>
 
-                    <!-- Botones de precio rápido -->
+                    <!-- NOTA FUTURA: Para cambiar precios, modificá los números en onclick="setAmount(XXX)" -->
                     <div class="field-group">
                         <label>Monto</label>
                         <div class="price-grid">
@@ -114,14 +161,18 @@
                             <button type="button" class="price-btn" onclick="setAmount(500)">$500</button>
                             <button type="button" class="price-btn" onclick="setAmount(1000)">$1000</button>
                         </div>
-                        <!-- NOTA FUTURA: Para cambiar los precios, modificá los números en onclick="setAmount(XXX)" arriba -->
                         <input type="number" id="custom-amount" placeholder="O escribí otro monto..." min="0">
+                    </div>
+
+                    <!-- Campo de nota opcional -->
+                    <div class="field-group">
+                        <label>Nota / Observación <span class="label-opcional">(opcional)</span></label>
+                        <input type="text" id="nota-registro" placeholder="Ej: fotocopia de prueba, pagó la mitad...">
                     </div>
 
                     <button type="submit" class="btn-main">Registrar Movimiento</button>
                 </form>
 
-                <!-- Resumen de caja del día -->
                 <div class="caja-card">
                     <div class="caja-label">💰 Caja del día</div>
                     <div id="caja-dia" class="caja-monto">$0</div>
@@ -135,17 +186,15 @@
             <section id="tab-buscar" class="tab-content">
                 <div class="section-header">
                     <h3>Buscar Usuario</h3>
-                    <p>Consultá el saldo y realizá pagos parciales</p>
+                    <p>Consultá el saldo, aboná o imprimí el resumen</p>
                 </div>
 
                 <div class="field-group">
                     <input type="text" id="search-input" placeholder="🔍 Escribí nombre o apellido..." autocomplete="off">
                 </div>
 
-                <!-- Resultados de búsqueda -->
                 <div id="search-results" class="search-results"></div>
 
-                <!-- Panel de perfil del usuario seleccionado -->
                 <div id="user-profile" class="user-profile" style="display:none;">
                     <div class="profile-header">
                         <div>
@@ -158,12 +207,13 @@
                         </div>
                     </div>
 
-                    <!-- Alerta de deudor crónico -->
                     <div id="alerta-deudor" class="alerta-deudor" style="display:none;">
                         ⚠️ DEUDOR CRÓNICO — debe más de $2.000
                     </div>
 
-                    <!-- Pago parcial -->
+                    <!-- Botón resumen imprimible / WhatsApp -->
+                    <button onclick="imprimirResumen()" class="btn-imprimir">🖨️ Resumen para imprimir / WhatsApp</button>
+
                     <div class="pago-parcial-box">
                         <h5>Registrar Abono</h5>
                         <div class="form-row">
@@ -176,7 +226,6 @@
                         <button onclick="registrarAbono()" class="btn-abono">✅ Registrar Abono</button>
                     </div>
 
-                    <!-- Historial del usuario -->
                     <h5 style="margin-top:20px;">Movimientos del usuario</h5>
                     <div id="profile-historial" class="profile-historial-container"></div>
                 </div>
@@ -191,7 +240,11 @@
                     <p>Todos los movimientos registrados</p>
                 </div>
 
-                <!-- Filtros -->
+                <!-- Buscador rápido en historial -->
+                <div class="field-group">
+                    <input type="text" id="historial-search" placeholder="🔍 Filtrar por nombre en el historial..." autocomplete="off">
+                </div>
+
                 <div class="filtros-bar">
                     <div class="field-group">
                         <label>Desde</label>
@@ -222,7 +275,8 @@
                                 <th>Nombre</th>
                                 <th>Monto</th>
                                 <th>Estado</th>
-                                <th>Acción</th>
+                                <th>Nota</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="cuerpo-tabla"></tbody>
@@ -230,7 +284,7 @@
                 </div>
 
                 <div class="historial-footer">
-                    <!-- NOTA FUTURA: El botón de exportar genera un CSV con todos los movimientos filtrados -->
+                    <!-- NOTA FUTURA: El CSV incluye todos los registros del historial visible -->
                     <button onclick="exportarCSV()" class="btn-export">⬇️ Exportar CSV</button>
                 </div>
             </section>
@@ -244,7 +298,6 @@
                     <p id="stats-periodo"></p>
                 </div>
 
-                <!-- Tarjetas de resumen -->
                 <div class="stats-grid">
                     <div class="stat-card">
                         <span class="stat-icon">💵</span>
@@ -268,13 +321,15 @@
                     </div>
                 </div>
 
-                <!-- Lista de deudores crónicos -->
                 <h5>Deudores con más de $2.000</h5>
                 <div id="lista-deudores" class="deudores-list"></div>
             </section>
 
         </main>
     </div>
+
+    <!-- Área de impresión oculta — se llena dinámicamente al imprimir -->
+    <div id="print-area" class="print-area"></div>
 
     <script src="script.js"></script>
 </body>
