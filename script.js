@@ -29,41 +29,11 @@ const UMBRAL_DEUDOR_CRONICO = 2000;
 
 // Variables globales de estado
 let usuarioSeleccionado = null; // Usuario activo en el buscador
-let docEditandoId       = null; // ID del documento que se está editando
+let docEditandoId       = null; // ID del documento que se está editando en el modal
 
 
 // ═══════════════════════════════════════════════════════════════
-// 1. TEMA CLARO / OSCURO
-// ═══════════════════════════════════════════════════════════════
-
-// Aplica el tema guardado al cargar la página (antes del login)
-(function aplicarTemaGuardado() {
-    const temaGuardado = localStorage.getItem('tema') || 'dark';
-    document.documentElement.setAttribute('data-theme', temaGuardado);
-    actualizarIconoTema(temaGuardado);
-})();
-
-// Alterna entre claro y oscuro, y guarda la preferencia
-// NOTA FUTURA: El tema se guarda en localStorage del navegador.
-// Si querés que siempre arranque en un tema fijo, cambiá 'dark' arriba.
-function toggleTheme() {
-    const html         = document.documentElement;
-    const temaActual   = html.getAttribute('data-theme');
-    const nuevoTema    = temaActual === 'dark' ? 'light' : 'dark';
-
-    html.setAttribute('data-theme', nuevoTema);
-    localStorage.setItem('tema', nuevoTema);
-    actualizarIconoTema(nuevoTema);
-}
-
-function actualizarIconoTema(tema) {
-    const btn = document.getElementById('theme-toggle');
-    if (btn) btn.textContent = tema === 'dark' ? '☀️' : '🌙';
-}
-
-
-// ═══════════════════════════════════════════════════════════════
-// 2. AUTENTICACIÓN
+// 1. AUTENTICACIÓN
 // ═══════════════════════════════════════════════════════════════
 
 // Si el usuario ya está logueado al abrir la página, entra directo
@@ -103,7 +73,7 @@ function mostrarApp() {
 
 
 // ═══════════════════════════════════════════════════════════════
-// 3. NAVEGACIÓN POR TABS
+// 2. NAVEGACIÓN POR TABS
 // ═══════════════════════════════════════════════════════════════
 function iniciarTabs() {
     const tabs      = document.querySelectorAll('.tab-btn');
@@ -121,14 +91,14 @@ function iniciarTabs() {
 
 
 // ═══════════════════════════════════════════════════════════════
-// 4. REGISTRO DE MOVIMIENTOS
+// 3. REGISTRO DE MOVIMIENTOS
 // ═══════════════════════════════════════════════════════════════
 
 function setAmount(val) {
     document.getElementById('custom-amount').value = val;
 }
 
-// ── Autocompletado de nombres al escribir ──
+// ── Autocompletado de nombres ──
 document.getElementById('user-name').addEventListener('input', async (e) => {
     const query = e.target.value.trim().toLowerCase();
     const lista = document.getElementById('autocomplete-list');
@@ -173,7 +143,7 @@ document.getElementById('copy-form').addEventListener('submit', async (e) => {
     const nombre = document.getElementById('user-name').value.trim().toLowerCase();
     const monto  = parseFloat(document.getElementById('custom-amount').value);
 
-    if (!nombre)               { alert("Ingresá el nombre del usuario."); return; }
+    if (!nombre)                    { alert("Ingresá el nombre del usuario."); return; }
     if (isNaN(monto) || monto <= 0) { alert("Ingresá un monto válido."); return; }
 
     const datos = {
@@ -183,7 +153,7 @@ document.getElementById('copy-form').addEventListener('submit', async (e) => {
         amount:     monto,
         // NOTA FUTURA: payMethod puede ser: "Debe", "Efectivo", "Transferencia", "Abono"
         payMethod:  document.getElementById('pay-method').value,
-        // NOTA FUTURA: El campo "nota" es opcional; queda vacío si no se completa
+        // NOTA FUTURA: "nota" es opcional; se guarda vacío si no se completa
         nota:       document.getElementById('nota-registro').value.trim(),
         fecha:      firebase.firestore.FieldValue.serverTimestamp()
     };
@@ -200,7 +170,7 @@ document.getElementById('copy-form').addEventListener('submit', async (e) => {
 
 
 // ═══════════════════════════════════════════════════════════════
-// 5. CAJA DEL DÍA
+// 4. CAJA DEL DÍA
 // ═══════════════════════════════════════════════════════════════
 function calcularCajaDelDia() {
     const hoy = new Date();
@@ -219,7 +189,7 @@ function calcularCajaDelDia() {
             });
 
             const total = efectivo + transferencia + abonos;
-            document.getElementById('caja-dia').textContent    = `$${total.toLocaleString('es-AR')}`;
+            document.getElementById('caja-dia').textContent     = `$${total.toLocaleString('es-AR')}`;
             document.getElementById('caja-detalle').textContent =
                 `Efectivo: $${efectivo} · Transf.: $${transferencia} · Abonos: $${abonos}`;
         });
@@ -227,7 +197,7 @@ function calcularCajaDelDia() {
 
 
 // ═══════════════════════════════════════════════════════════════
-// 6. BUSCADOR DE USUARIOS
+// 5. BUSCADOR DE USUARIOS
 // ═══════════════════════════════════════════════════════════════
 document.getElementById('search-input').addEventListener('input', async (e) => {
     const query      = e.target.value.trim().toLowerCase();
@@ -281,6 +251,7 @@ document.getElementById('search-input').addEventListener('input', async (e) => {
 });
 
 // ── Cargar perfil completo de un usuario ──
+// Muestra saldo, alerta, abono y TODOS sus movimientos con botón editar/borrar
 function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
     usuarioSeleccionado = { nombre, curso };
 
@@ -291,8 +262,8 @@ function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
     const saldoEl  = document.getElementById('profile-saldo');
     const alertaEl = document.getElementById('alerta-deudor');
 
-    saldoEl.textContent = `$${saldoDeuda.toLocaleString('es-AR')}`;
-    saldoEl.className   = 'profile-saldo ' + (saldoDeuda > 0 ? '' : 'verde');
+    saldoEl.textContent    = `$${saldoDeuda.toLocaleString('es-AR')}`;
+    saldoEl.className      = 'profile-saldo ' + (saldoDeuda > 0 ? '' : 'verde');
     alertaEl.style.display = saldoDeuda >= UMBRAL_DEUDOR_CRONICO ? 'block' : 'none';
 
     // Escucha en tiempo real los movimientos del usuario
@@ -308,7 +279,7 @@ function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
                 return;
             }
 
-            // Recalcula saldo en tiempo real
+            // Recalcula el saldo en tiempo real después de cada cambio
             let deudaActual = 0;
             snapshot.forEach(doc => {
                 const d = doc.data();
@@ -321,24 +292,29 @@ function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
             saldoEl.className      = 'profile-saldo ' + (deudaActual > 0 ? '' : 'verde');
             alertaEl.style.display = deudaActual >= UMBRAL_DEUDOR_CRONICO ? 'block' : 'none';
 
+            // Renderiza cada movimiento CON botones de editar y borrar
             snapshot.forEach(doc => {
-                const d      = doc.data();
-                const fecha  = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
-                const css    = obtenerCSS(d.payMethod);
-                const esAbono = d.payMethod === 'Abono';
+                const d     = doc.data();
+                const id    = doc.id;
+                const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
+                const css   = obtenerCSS(d.payMethod);
 
                 const div = document.createElement('div');
                 div.className = 'mov-item';
                 div.innerHTML = `
-                    <div>
+                    <div style="flex:1; min-width:0;">
                         <div class="mov-fecha">${fecha}</div>
-                        ${d.nota ? `<div style="font-size:0.72rem; color:var(--text-dim); font-style:italic;">${d.nota}</div>` : ''}
+                        ${d.nota ? `<div class="mov-nota">${d.nota}</div>` : ''}
                     </div>
-                    <div style="display:flex; gap:8px; align-items:center;">
-                        <span class="mov-monto" style="color: ${d.payMethod === 'Debe' ? 'var(--red)' : 'var(--green)'}">
-                            ${esAbono ? '-' : ''}$${Number(d.amount).toLocaleString('es-AR')}
+                    <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
+                        <span class="mov-monto" style="color:${d.payMethod === 'Debe' ? 'var(--red)' : 'var(--green)'}">
+                            ${d.payMethod === 'Abono' ? '-' : ''}$${Number(d.amount).toLocaleString('es-AR')}
                         </span>
-                        <span class="mov-metodo badge ${css}">${d.payMethod}</span>
+                        <span class="mov-metodo ${css}">${d.payMethod}</span>
+                        <div class="mov-acciones">
+                            <button class="btn-editar"   onclick="abrirEdicion('${id}')" title="Editar">✏️</button>
+                            <button class="btn-eliminar" onclick="eliminarRegistro('${id}')" title="Borrar">🗑️</button>
+                        </div>
                     </div>
                 `;
                 container.appendChild(div);
@@ -363,7 +339,7 @@ async function registrarAbono() {
         userCourse:  usuarioSeleccionado.curso || "",
         userRole:    "Alumno",
         amount:      monto,
-        // NOTA FUTURA: Los abonos reducen la deuda automáticamente en el cálculo de saldo
+        // NOTA FUTURA: Los abonos se descuentan automáticamente del saldo
         payMethod:   "Abono",
         abonoMetodo: metodo,
         nota:        `Abono en ${metodo}`,
@@ -381,9 +357,176 @@ async function registrarAbono() {
 
 
 // ═══════════════════════════════════════════════════════════════
-// 7. RESUMEN IMPRIMIBLE / WHATSAPP
-// Genera una vista limpia del historial del usuario seleccionado
-// lista para imprimir o copiar y mandar por WhatsApp.
+// 6. EDITAR REGISTRO
+// Funciona tanto desde el historial general como desde el perfil
+// del usuario en el tab Buscar.
+// ═══════════════════════════════════════════════════════════════
+
+// Abre el modal y carga los datos actuales del registro a editar
+async function abrirEdicion(docId) {
+    docEditandoId = docId;
+
+    try {
+        const doc  = await db.collection("fotocopias").doc(docId).get();
+        const data = doc.data();
+
+        document.getElementById('edit-nombre').value = data.userName   || '';
+        document.getElementById('edit-curso').value  = data.userCourse || '';
+        document.getElementById('edit-monto').value  = data.amount     || '';
+        document.getElementById('edit-metodo').value = data.payMethod  || 'Debe';
+        document.getElementById('edit-nota').value   = data.nota       || '';
+
+        document.getElementById('modal-editar').style.display = 'flex';
+    } catch (error) {
+        alert("Error al cargar el registro: " + error.message);
+    }
+}
+
+// Guarda los cambios del modal en Firestore
+async function guardarEdicion() {
+    if (!docEditandoId) return;
+
+    const nombre = document.getElementById('edit-nombre').value.trim().toLowerCase();
+    const monto  = parseFloat(document.getElementById('edit-monto').value);
+
+    if (!nombre)                    { alert("El nombre no puede estar vacío."); return; }
+    if (isNaN(monto) || monto <= 0) { alert("Ingresá un monto válido."); return; }
+
+    const cambios = {
+        userName:   nombre,
+        userCourse: document.getElementById('edit-curso').value.trim(),
+        amount:     monto,
+        payMethod:  document.getElementById('edit-metodo').value,
+        nota:       document.getElementById('edit-nota').value.trim()
+    };
+
+    try {
+        await db.collection("fotocopias").doc(docEditandoId).update(cambios);
+        alert("✅ Registro actualizado correctamente.");
+        cerrarModal();
+    } catch (error) {
+        alert("Error al guardar: " + error.message);
+    }
+}
+
+function cerrarModal() {
+    document.getElementById('modal-editar').style.display = 'none';
+    docEditandoId = null;
+}
+
+// Cierra el modal al hacer clic en el fondo oscuro
+document.getElementById('modal-editar').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('modal-editar')) cerrarModal();
+});
+
+
+// ═══════════════════════════════════════════════════════════════
+// 7. ELIMINAR REGISTRO
+// NOTA FUTURA: El borrado es permanente. No hay deshacer.
+// ═══════════════════════════════════════════════════════════════
+function eliminarRegistro(docId) {
+    if (!confirm("⚠️ ¿Estás seguro que querés borrar este registro?\nEsta acción no se puede deshacer.")) return;
+
+    db.collection("fotocopias").doc(docId).delete()
+        .then(() => alert("🗑️ Registro eliminado."))
+        .catch(err => alert("Error: " + err.message));
+}
+
+// Saldar deuda completa (cambia el método a Efectivo)
+function saldarDeuda(docId) {
+    if (!confirm("¿Confirmás que este movimiento fue pagado completamente?")) return;
+
+    db.collection("fotocopias").doc(docId).update({ payMethod: "Efectivo" })
+        .then(() => alert("✅ Deuda saldada."))
+        .catch(err => alert("Error: " + err.message));
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// 8. HISTORIAL GENERAL CON FILTROS + BUSCADOR EN TIEMPO REAL
+// ═══════════════════════════════════════════════════════════════
+
+// Buscador instantáneo que filtra las filas visibles de la tabla
+function iniciarBuscadorHistorial() {
+    document.getElementById('historial-search').addEventListener('input', (e) => {
+        const query = e.target.value.trim().toLowerCase();
+        document.querySelectorAll('#cuerpo-tabla tr').forEach(fila => {
+            fila.style.display = fila.textContent.toLowerCase().includes(query) ? '' : 'none';
+        });
+    });
+}
+
+function cargarHistorialGeneral(filtros = {}) {
+    // NOTA FUTURA: Para mostrar más registros, cambiá el número en .limit(80)
+    let consulta = db.collection("fotocopias").orderBy("fecha", "desc").limit(80);
+
+    if (filtros.metodo) {
+        consulta = db.collection("fotocopias")
+            .where("payMethod", "==", filtros.metodo)
+            .orderBy("fecha", "desc")
+            .limit(80);
+    }
+    if (filtros.desde) consulta = consulta.where("fecha", ">=", new Date(filtros.desde));
+    if (filtros.hasta) {
+        const fin = new Date(filtros.hasta);
+        fin.setDate(fin.getDate() + 1);
+        consulta = consulta.where("fecha", "<=", fin);
+    }
+
+    consulta.onSnapshot((snapshot) => {
+        const tbody = document.getElementById('cuerpo-tabla');
+        tbody.innerHTML = "";
+
+        if (snapshot.empty) {
+            tbody.innerHTML = `<tr><td colspan="6" class="empty-msg">Sin registros para mostrar.</td></tr>`;
+            return;
+        }
+
+        snapshot.forEach(doc => {
+            const d     = doc.data();
+            const id    = doc.id;
+            const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
+            const css   = obtenerCSS(d.payMethod);
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${fecha}</td>
+                <td style="font-weight:600;">${d.userName ? d.userName.toUpperCase() : '---'}</td>
+                <td style="font-family:var(--font-mono); font-weight:700;">$${Number(d.amount).toLocaleString('es-AR')}</td>
+                <td><span class="badge ${css}">${d.payMethod}</span></td>
+                <td class="nota-cell" title="${d.nota || ''}">${d.nota || '—'}</td>
+                <td>
+                    <div class="acciones-cell">
+                        ${d.payMethod === 'Debe' ? `<button class="btn-pagar" onclick="saldarDeuda('${id}')">✅ Pagar</button>` : ''}
+                        <button class="btn-editar"   onclick="abrirEdicion('${id}')">✏️ Editar</button>
+                        <button class="btn-eliminar" onclick="eliminarRegistro('${id}')">🗑️ Borrar</button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // Reaplica el filtro de búsqueda si hay algo escrito
+        const query = document.getElementById('historial-search').value.trim().toLowerCase();
+        if (query) {
+            document.querySelectorAll('#cuerpo-tabla tr').forEach(fila => {
+                fila.style.display = fila.textContent.toLowerCase().includes(query) ? '' : 'none';
+            });
+        }
+    });
+}
+
+function aplicarFiltros() {
+    cargarHistorialGeneral({
+        desde:  document.getElementById('filtro-desde').value,
+        hasta:  document.getElementById('filtro-hasta').value,
+        metodo: document.getElementById('filtro-metodo').value
+    });
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// 9. RESUMEN IMPRIMIBLE / WHATSAPP
 // ═══════════════════════════════════════════════════════════════
 async function imprimirResumen() {
     if (!usuarioSeleccionado) { alert("Seleccioná un usuario primero."); return; }
@@ -415,194 +558,19 @@ async function imprimirResumen() {
 
     deuda = Math.max(0, deuda);
 
-    // Llena el área de impresión
     document.getElementById('print-area').innerHTML = `
         <div class="print-title">ESRN 135 — Resumen de cuenta</div>
         <div class="print-subtitle">Generado el ${new Date().toLocaleDateString('es-AR')}</div>
         <div class="print-saldo">Alumno: ${nombre.toUpperCase()} | Saldo adeudado: $${deuda.toLocaleString('es-AR')}</div>
         <table class="print-table">
-            <thead>
-                <tr><th>Fecha</th><th>Método</th><th>Monto</th><th>Nota</th></tr>
-            </thead>
+            <thead><tr><th>Fecha</th><th>Método</th><th>Monto</th><th>Nota</th></tr></thead>
             <tbody>${filas}</tbody>
         </table>
-        <p style="margin-top:16px; font-size:0.8rem; color:#555;">
-            Alias: esrn135 · WhatsApp: 2920-298994
-        </p>
+        <p style="margin-top:16px; font-size:0.8rem; color:#555;">Alias: esrn135 · WhatsApp: 2920-298994</p>
     `;
 
     window.print();
 }
-
-
-// ═══════════════════════════════════════════════════════════════
-// 8. HISTORIAL GENERAL CON FILTROS + BUSCADOR
-// ═══════════════════════════════════════════════════════════════
-
-// Buscador en tiempo real dentro del historial
-function iniciarBuscadorHistorial() {
-    document.getElementById('historial-search').addEventListener('input', (e) => {
-        const query = e.target.value.trim().toLowerCase();
-        // Filtra las filas visibles en la tabla sin nueva consulta a Firestore
-        const filas = document.querySelectorAll('#cuerpo-tabla tr');
-        filas.forEach(fila => {
-            const texto = fila.textContent.toLowerCase();
-            fila.style.display = texto.includes(query) ? '' : 'none';
-        });
-    });
-}
-
-function cargarHistorialGeneral(filtros = {}) {
-    let consulta = db.collection("fotocopias").orderBy("fecha", "desc").limit(80);
-    // NOTA FUTURA: Para mostrar más registros, cambiá el número en .limit(80)
-
-    if (filtros.metodo) {
-        consulta = db.collection("fotocopias")
-            .where("payMethod", "==", filtros.metodo)
-            .orderBy("fecha", "desc")
-            .limit(80);
-    }
-
-    if (filtros.desde) {
-        consulta = consulta.where("fecha", ">=", new Date(filtros.desde));
-    }
-    if (filtros.hasta) {
-        const hastaFin = new Date(filtros.hasta);
-        hastaFin.setDate(hastaFin.getDate() + 1);
-        consulta = consulta.where("fecha", "<=", hastaFin);
-    }
-
-    consulta.onSnapshot((snapshot) => {
-        const tbody = document.getElementById('cuerpo-tabla');
-        tbody.innerHTML = "";
-
-        if (snapshot.empty) {
-            tbody.innerHTML = `<tr><td colspan="6" class="empty-msg">Sin registros para mostrar.</td></tr>`;
-            return;
-        }
-
-        snapshot.forEach(doc => {
-            const d     = doc.data();
-            const id    = doc.id;
-            const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
-            const css   = obtenerCSS(d.payMethod);
-            const esDeuda = d.payMethod === 'Debe';
-
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${fecha}</td>
-                <td>${d.userName ? d.userName.toUpperCase() : '---'}</td>
-                <td style="font-family:var(--font-mono);">$${Number(d.amount).toLocaleString('es-AR')}</td>
-                <td><span class="badge ${css}">${d.payMethod}</span></td>
-                <td class="nota-cell" title="${d.nota || ''}">${d.nota || '—'}</td>
-                <td>
-                    <div class="acciones-cell">
-                        ${esDeuda ? `<button class="btn-pagar" onclick="saldarDeuda('${id}')">✅ Pagar</button>` : ''}
-                        <button class="btn-editar"   onclick="abrirEdicion('${id}')">✏️ Editar</button>
-                        <button class="btn-eliminar" onclick="eliminarRegistro('${id}')">🗑️ Borrar</button>
-                    </div>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-
-        // Reaplica el buscador si hay algo escrito
-        const query = document.getElementById('historial-search').value.trim().toLowerCase();
-        if (query) {
-            document.querySelectorAll('#cuerpo-tabla tr').forEach(fila => {
-                fila.style.display = fila.textContent.toLowerCase().includes(query) ? '' : 'none';
-            });
-        }
-    });
-}
-
-function aplicarFiltros() {
-    const filtros = {
-        desde:  document.getElementById('filtro-desde').value,
-        hasta:  document.getElementById('filtro-hasta').value,
-        metodo: document.getElementById('filtro-metodo').value
-    };
-    cargarHistorialGeneral(filtros);
-}
-
-// ── Saldar deuda completa (cambia a Efectivo) ──
-function saldarDeuda(docId) {
-    if (!confirm("¿Confirmás que este movimiento fue pagado completamente?")) return;
-    db.collection("fotocopias").doc(docId).update({ payMethod: "Efectivo" })
-        .then(() => alert("✅ Deuda saldada."))
-        .catch(err => alert("Error: " + err.message));
-}
-
-// ── Eliminar registro ──
-// NOTA FUTURA: El borrado es permanente. No hay papelera de reciclaje.
-function eliminarRegistro(docId) {
-    if (!confirm("⚠️ ¿Estás seguro que querés borrar este registro?\nEsta acción no se puede deshacer.")) return;
-    db.collection("fotocopias").doc(docId).delete()
-        .then(() => alert("🗑️ Registro eliminado."))
-        .catch(err => alert("Error: " + err.message));
-}
-
-
-// ═══════════════════════════════════════════════════════════════
-// 9. EDITAR REGISTRO
-// ═══════════════════════════════════════════════════════════════
-
-// Abre el modal y carga los datos actuales del registro
-async function abrirEdicion(docId) {
-    docEditandoId = docId;
-
-    try {
-        const doc  = await db.collection("fotocopias").doc(docId).get();
-        const data = doc.data();
-
-        document.getElementById('edit-nombre').value  = data.userName   || '';
-        document.getElementById('edit-curso').value   = data.userCourse || '';
-        document.getElementById('edit-monto').value   = data.amount     || '';
-        document.getElementById('edit-metodo').value  = data.payMethod  || 'Debe';
-        document.getElementById('edit-nota').value    = data.nota       || '';
-
-        document.getElementById('modal-editar').style.display = 'flex';
-    } catch (error) {
-        alert("Error al cargar el registro: " + error.message);
-    }
-}
-
-// Guarda los cambios del modal al documento en Firestore
-async function guardarEdicion() {
-    if (!docEditandoId) return;
-
-    const nombre = document.getElementById('edit-nombre').value.trim().toLowerCase();
-    const monto  = parseFloat(document.getElementById('edit-monto').value);
-
-    if (!nombre)               { alert("El nombre no puede estar vacío."); return; }
-    if (isNaN(monto) || monto <= 0) { alert("Ingresá un monto válido."); return; }
-
-    const cambios = {
-        userName:   nombre,
-        userCourse: document.getElementById('edit-curso').value.trim(),
-        amount:     monto,
-        payMethod:  document.getElementById('edit-metodo').value,
-        nota:       document.getElementById('edit-nota').value.trim()
-    };
-
-    try {
-        await db.collection("fotocopias").doc(docEditandoId).update(cambios);
-        alert("✅ Registro actualizado.");
-        cerrarModal();
-    } catch (error) {
-        alert("Error al guardar: " + error.message);
-    }
-}
-
-function cerrarModal() {
-    document.getElementById('modal-editar').style.display = 'none';
-    docEditandoId = null;
-}
-
-// Cierra el modal al hacer clic en el fondo oscuro
-document.getElementById('modal-editar').addEventListener('click', (e) => {
-    if (e.target === document.getElementById('modal-editar')) cerrarModal();
-});
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -644,7 +612,7 @@ function calcularEstadisticas() {
         .where("fecha", ">=", primerDia)
         .onSnapshot((snapshot) => {
             let recaudadoMes = 0;
-            const saldos     = {};
+            const saldos = {};
 
             snapshot.forEach(doc => {
                 const d = doc.data();
@@ -688,14 +656,13 @@ function calcularEstadisticas() {
     db.collection("fotocopias")
         .where("payMethod", "in", ["Debe", "Abono"])
         .onSnapshot((snapshot) => {
-            let totalDeuda = 0;
+            let total = 0;
             snapshot.forEach(doc => {
                 const d = doc.data();
-                if (d.payMethod === "Debe")  totalDeuda += Number(d.amount);
-                if (d.payMethod === "Abono") totalDeuda -= Number(d.amount);
+                if (d.payMethod === "Debe")  total += Number(d.amount);
+                if (d.payMethod === "Abono") total -= Number(d.amount);
             });
-            document.getElementById('stat-deuda').textContent =
-                `$${Math.max(0, totalDeuda).toLocaleString('es-AR')}`;
+            document.getElementById('stat-deuda').textContent = `$${Math.max(0, total).toLocaleString('es-AR')}`;
         });
 
     // Recaudación de hoy
@@ -715,6 +682,7 @@ function calcularEstadisticas() {
 
 // ═══════════════════════════════════════════════════════════════
 // 12. NOTIFICACIÓN DE DEUDORES CRÓNICOS AL INICIAR
+// NOTA FUTURA: Para desactivar el aviso al entrar, comentá el setTimeout abajo.
 // ═══════════════════════════════════════════════════════════════
 async function notificarDeudoresCronicos() {
     const snapshot = await db.collection("fotocopias")
@@ -733,7 +701,6 @@ async function notificarDeudoresCronicos() {
 
     if (cronicos.length > 0) {
         const nombres = cronicos.map(([n]) => n.toUpperCase()).join(", ");
-        // NOTA FUTURA: Para desactivar este aviso al iniciar, comentá las líneas de setTimeout abajo
         setTimeout(() => {
             alert(`⚠️ Hay ${cronicos.length} deudor(es) crónico(s):\n\n${nombres}\n\nRevisá la pestaña Estadísticas.`);
         }, 1000);
@@ -743,10 +710,8 @@ async function notificarDeudoresCronicos() {
 
 // ═══════════════════════════════════════════════════════════════
 // 13. UTILIDADES
+// NOTA FUTURA: Si agregás un nuevo método de pago, añadí su caso acá.
 // ═══════════════════════════════════════════════════════════════
-
-// Devuelve la clase CSS para el badge según método de pago
-// NOTA FUTURA: Si agregás un nuevo método, añadí su caso acá
 function obtenerCSS(metodo) {
     switch (metodo) {
         case "Debe":          return "metodo-debe";
