@@ -5,107 +5,277 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión Fotocopias - ESRN 135</title>
     <link rel="stylesheet" href="style.css">
-    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Firebase v8 (CDN) - no cambiar versión -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 </head>
 <body>
 
-    <div id="login-container" class="card">
-        <h2>Acceso Administrativo</h2>
-        <p>ESRN 135 - Área TIC</p>
-        <form id="login-form">
-            <input type="email" id="email" value="areatic135@gmail.com" readonly>
-            <input type="password" id="password" placeholder="Contraseña" required>
-            <button type="submit">Ingresar</button>
-        </form>
+    <!-- ══════════════════════════════════════════
+         PANTALLA DE LOGIN
+    ══════════════════════════════════════════ -->
+    <div id="login-container">
+        <div class="login-card">
+            <div class="login-logo">
+                <span class="logo-icon">📋</span>
+                <h2>ESRN 135</h2>
+                <p>Sistema de Fotocopias · Área TIC</p>
+            </div>
+            <form id="login-form">
+                <div class="field-group">
+                    <label>Usuario</label>
+                    <input type="email" id="email" value="areatic135@gmail.com" readonly>
+                </div>
+                <div class="field-group">
+                    <label>Contraseña</label>
+                    <input type="password" id="password" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn-login">Ingresar →</button>
+                <p id="login-error" class="login-error"></p>
+            </form>
+        </div>
     </div>
 
-    <div id="app-container" class="card" style="display: none;">
-        <header>
-            <h1>Control de Copias</h1>
-            <button id="logout-btn" class="btn-small">Cerrar Sesión</button>
+    <!-- ══════════════════════════════════════════
+         APLICACIÓN PRINCIPAL (visible tras login)
+    ══════════════════════════════════════════ -->
+    <div id="app-container" style="display:none;">
+
+        <!-- BARRA SUPERIOR -->
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <span class="top-logo">📋 ESRN 135</span>
+                <span class="top-subtitle">Control de Fotocopias</span>
+            </div>
+            <button id="logout-btn" class="btn-logout">Salir</button>
         </header>
 
-        <div class="search-box">
-            <input type="text" id="search-input" placeholder="🔍 Buscar por nombre del alumno/profe...">
-            <div id="user-status" class="status-alert">
-                Busca un usuario para ver su saldo.
-            </div>
-        </div>
+        <!-- TABS DE NAVEGACIÓN -->
+        <nav class="tab-nav">
+            <button class="tab-btn active" data-tab="tab-registrar">➕ Registrar</button>
+            <button class="tab-btn" data-tab="tab-buscar">🔍 Buscar</button>
+            <button class="tab-btn" data-tab="tab-historial">📋 Historial</button>
+            <button class="tab-btn" data-tab="tab-stats">📊 Estadísticas</button>
+        </nav>
 
-        <hr>
+        <main class="main-content">
 
-        <form id="copy-form">
-            <div class="form-group">
-                <input type="text" id="user-name" placeholder="Nombre y Apellido" required>
-                <input type="text" id="user-course" placeholder="Curso (ej: 4to 2da)">
-            </div>
-            
-            <div class="form-group">
-                <select id="user-role">
-                    <option value="Alumno">Alumno</option>
-                    <option value="Profesor">Profesor</option>
-                </select>
-                <select id="pay-method">
-                    <option value="Debe">Anotar (Deuda)</option>
-                    <option value="Efectivo">Efectivo</option>
-                    <option value="Transferencia">Transferencia</option>
-                </select>
-            </div>
+            <!-- ══════════════════════════════════
+                 TAB 1: REGISTRAR MOVIMIENTO
+            ══════════════════════════════════ -->
+            <section id="tab-registrar" class="tab-content active">
+                <div class="section-header">
+                    <h3>Nuevo Movimiento</h3>
+                    <p>Registrá copias, pagos o abonos</p>
+                </div>
 
-            <div class="price-buttons">
-                <button type="button" onclick="setAmount(200)">Simple ($200)</button>
-                <button type="button" onclick="setAmount(250)">Doble ($250)</button>
-                <input type="number" id="custom-amount" placeholder="Otro monto $">
-            </div>
+                <form id="copy-form">
+                    <!-- Nombre con autocompletado -->
+                    <div class="field-group">
+                        <label>Nombre y Apellido *</label>
+                        <input type="text" id="user-name" placeholder="Ej: Juan Pérez" autocomplete="off" required>
+                        <ul id="autocomplete-list" class="autocomplete-list"></ul>
+                    </div>
 
-            <button type="submit" class="btn-main">Registrar Movimiento</button>
-        </form>
+                    <div class="form-row">
+                        <div class="field-group">
+                            <label>Curso</label>
+                            <input type="text" id="user-course" placeholder="Ej: 4to 2da">
+                        </div>
+                        <div class="field-group">
+                            <label>Rol</label>
+                            <select id="user-role">
+                                <option value="Alumno">Alumno</option>
+                                <option value="Profesor">Profesor</option>
+                            </select>
+                        </div>
+                    </div>
 
-        <hr>
-        <!-- aca modifico  -->
-<!-- <h3>Historial y Búsqueda</h3>
-<div id="contenedor-historial" style="overflow-x:auto; margin-top: 15px;">
-    <table id="tabla-historial" style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
-        <thead>
-            <tr style="background: #f0f0f0; text-align: left;">
-                <th style="padding: 8px;">Fecha</th>
-                <th style="padding: 8px;">Nombre</th>
-                <th style="padding: 8px;">Monto</th>
-                <th style="padding: 8px;">Estado</th>
-            </tr>
-        </thead>
-        <tbody id="cuerpo-tabla">
-            </tbody>
-    </table>
-</div>
+                    <div class="field-group">
+                        <label>Método de pago</label>
+                        <select id="pay-method">
+                            <option value="Debe">📝 Anotar como Deuda</option>
+                            <option value="Efectivo">💵 Efectivo</option>
+                            <option value="Transferencia">📱 Transferencia</option>
+                            <option value="Abono">✅ Abono / Pago parcial</option>
+                        </select>
+                    </div>
 
-        <div class="footer-info">
-            <p>Alias: <strong>esrn135</strong> | WhatsApp: 2920-298994</p>
-            <button onclick="exportarCSV()" class="btn-report">Descargar Informe Mensual</button>
-        </div>
-    </div> -->
+                    <!-- Botones de precio rápido -->
+                    <div class="field-group">
+                        <label>Monto</label>
+                        <div class="price-grid">
+                            <button type="button" class="price-btn" onclick="setAmount(200)">Simple<br><strong>$200</strong></button>
+                            <button type="button" class="price-btn" onclick="setAmount(250)">Doble<br><strong>$250</strong></button>
+                            <button type="button" class="price-btn" onclick="setAmount(500)">$500</button>
+                            <button type="button" class="price-btn" onclick="setAmount(1000)">$1000</button>
+                        </div>
+                        <!-- NOTA FUTURA: Para cambiar los precios, modificá los números en onclick="setAmount(XXX)" arriba -->
+                        <input type="number" id="custom-amount" placeholder="O escribí otro monto..." min="0">
+                    </div>
 
-<hr>
-        <p id="caja-dia" style="font-weight: bold; color: #2ecc71; margin-bottom: 10px;"></p>
-        
-        <h3>Historial y Búsqueda</h3>
-        <div id="contenedor-historial" style="overflow-x:auto; margin-top: 15px;">
-            <table id="tabla-historial" style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
-                <thead>
-                    <tr style="background: #f0f0f0; text-align: left;">
-                        <th style="padding: 8px;">Fecha</th>
-                        <th style="padding: 8px;">Nombre</th>
-                        <th style="padding: 8px;">Monto</th>
-                        <th style="padding: 8px;">Estado</th>
-                    </tr>
-                </thead>
-                <tbody id="cuerpo-tabla">
-                    </tbody>
-            </table>
-        </div>
+                    <button type="submit" class="btn-main">Registrar Movimiento</button>
+                </form>
+
+                <!-- Resumen de caja del día -->
+                <div class="caja-card">
+                    <div class="caja-label">💰 Caja del día</div>
+                    <div id="caja-dia" class="caja-monto">$0</div>
+                    <div id="caja-detalle" class="caja-detalle"></div>
+                </div>
+            </section>
+
+            <!-- ══════════════════════════════════
+                 TAB 2: BUSCAR USUARIO
+            ══════════════════════════════════ -->
+            <section id="tab-buscar" class="tab-content">
+                <div class="section-header">
+                    <h3>Buscar Usuario</h3>
+                    <p>Consultá el saldo y realizá pagos parciales</p>
+                </div>
+
+                <div class="field-group">
+                    <input type="text" id="search-input" placeholder="🔍 Escribí nombre o apellido..." autocomplete="off">
+                </div>
+
+                <!-- Resultados de búsqueda -->
+                <div id="search-results" class="search-results"></div>
+
+                <!-- Panel de perfil del usuario seleccionado -->
+                <div id="user-profile" class="user-profile" style="display:none;">
+                    <div class="profile-header">
+                        <div>
+                            <h4 id="profile-name"></h4>
+                            <span id="profile-curso" class="profile-badge"></span>
+                        </div>
+                        <div class="profile-saldo-box">
+                            <span class="profile-saldo-label">Saldo deudor</span>
+                            <span id="profile-saldo" class="profile-saldo">$0</span>
+                        </div>
+                    </div>
+
+                    <!-- Alerta de deudor crónico -->
+                    <div id="alerta-deudor" class="alerta-deudor" style="display:none;">
+                        ⚠️ DEUDOR CRÓNICO — debe más de $2.000
+                    </div>
+
+                    <!-- Pago parcial -->
+                    <div class="pago-parcial-box">
+                        <h5>Registrar Abono</h5>
+                        <div class="form-row">
+                            <input type="number" id="abono-monto" placeholder="Monto a abonar $" min="1">
+                            <select id="abono-metodo">
+                                <option value="Efectivo">Efectivo</option>
+                                <option value="Transferencia">Transferencia</option>
+                            </select>
+                        </div>
+                        <button onclick="registrarAbono()" class="btn-abono">✅ Registrar Abono</button>
+                    </div>
+
+                    <!-- Historial del usuario -->
+                    <h5 style="margin-top:20px;">Movimientos del usuario</h5>
+                    <div id="profile-historial" class="profile-historial-container"></div>
+                </div>
+            </section>
+
+            <!-- ══════════════════════════════════
+                 TAB 3: HISTORIAL GENERAL
+            ══════════════════════════════════ -->
+            <section id="tab-historial" class="tab-content">
+                <div class="section-header">
+                    <h3>Historial General</h3>
+                    <p>Todos los movimientos registrados</p>
+                </div>
+
+                <!-- Filtros -->
+                <div class="filtros-bar">
+                    <div class="field-group">
+                        <label>Desde</label>
+                        <input type="date" id="filtro-desde">
+                    </div>
+                    <div class="field-group">
+                        <label>Hasta</label>
+                        <input type="date" id="filtro-hasta">
+                    </div>
+                    <div class="field-group">
+                        <label>Método</label>
+                        <select id="filtro-metodo">
+                            <option value="">Todos</option>
+                            <option value="Debe">Deuda</option>
+                            <option value="Efectivo">Efectivo</option>
+                            <option value="Transferencia">Transferencia</option>
+                            <option value="Abono">Abono</option>
+                        </select>
+                    </div>
+                    <button onclick="aplicarFiltros()" class="btn-filtrar">Filtrar</button>
+                </div>
+
+                <div id="historial-container" class="table-wrapper">
+                    <table id="tabla-historial">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Nombre</th>
+                                <th>Monto</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cuerpo-tabla"></tbody>
+                    </table>
+                </div>
+
+                <div class="historial-footer">
+                    <!-- NOTA FUTURA: El botón de exportar genera un CSV con todos los movimientos filtrados -->
+                    <button onclick="exportarCSV()" class="btn-export">⬇️ Exportar CSV</button>
+                </div>
+            </section>
+
+            <!-- ══════════════════════════════════
+                 TAB 4: ESTADÍSTICAS
+            ══════════════════════════════════ -->
+            <section id="tab-stats" class="tab-content">
+                <div class="section-header">
+                    <h3>Estadísticas del Mes</h3>
+                    <p id="stats-periodo"></p>
+                </div>
+
+                <!-- Tarjetas de resumen -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-icon">💵</span>
+                        <span class="stat-label">Recaudado hoy</span>
+                        <span id="stat-hoy" class="stat-value green">$0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">📅</span>
+                        <span class="stat-label">Recaudado este mes</span>
+                        <span id="stat-mes" class="stat-value green">$0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">📋</span>
+                        <span class="stat-label">Total adeudado</span>
+                        <span id="stat-deuda" class="stat-value red">$0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-icon">⚠️</span>
+                        <span class="stat-label">Deudores crónicos</span>
+                        <span id="stat-cronicos" class="stat-value orange">0</span>
+                    </div>
+                </div>
+
+                <!-- Lista de deudores crónicos -->
+                <h5>Deudores con más de $2.000</h5>
+                <div id="lista-deudores" class="deudores-list"></div>
+            </section>
+
+        </main>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>
