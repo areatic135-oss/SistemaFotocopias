@@ -1,0 +1,90 @@
+:root {
+    --primary: #2c3e50;
+    --accent: #3498db;
+    --success: #27ae60;
+    --danger: #e74c3c;
+    --light: #ecf0f1;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #d1d8e0;
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+}
+
+.card {
+    background: white;
+    padding: 25px;
+    border-radius: 15px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 500px;
+}
+
+h1, h2 { text-align: center; color: var(--primary); }
+
+input, select, button {
+    width: 100%;
+    padding: 12px;
+    margin: 8px 0;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+.form-group { display: flex; gap: 10px; }
+
+.price-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+}
+
+.price-buttons button {
+    background: var(--light);
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.price-buttons button:hover { background: #bdc3c7; }
+
+.btn-main {
+    background: var(--success);
+    color: white;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.status-alert {
+    background: #e8f4fd;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 5px solid var(--accent);
+    margin: 10px 0;
+}
+
+.btn-report { background: var(--primary); color: white; border: none; cursor: pointer; }
+
+.btn-small { width: auto; padding: 5px 10px; background: var(--danger); color: white; border: none; font-size: 12px; cursor: pointer; }
+
+header { display: flex; justify-content: space-between; align-items: center; }
+
+#tabla-historial th {
+    border-bottom: 2px solid #3498db;
+    color: #333;
+}
+
+#contenedor-historial {
+    background: white;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.rojo { color: #e74c3c; font-weight: bold; }
+.verde { color: #27ae60; }
