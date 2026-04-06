@@ -708,6 +708,36 @@ tbody tr:last-child td { border-bottom: none; }
 .btn-export:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
 
 /* ═══════════════════════════════════════════════════════════════
+   REPORTE CIERRE DE MES
+   ═══════════════════════════════════════════════════════════════ */
+.cierre-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-top: 4px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+}
+
+.cierre-box h5 { margin-bottom: 6px; }
+
+.cierre-desc {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+}
+
+.cierre-resumen-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.cierre-resumen-header h5 { margin-bottom: 0; }
+
+/* ═══════════════════════════════════════════════════════════════
    ESTADÍSTICAS
    ═══════════════════════════════════════════════════════════════ */
 .stats-grid {

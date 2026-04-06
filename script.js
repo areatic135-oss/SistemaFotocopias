@@ -67,7 +67,6 @@ function mostrarApp() {
     calcularCajaDelDia();
     cargarHistorialGeneral();
     calcularEstadisticas();
-    notificarDeudoresCronicos();
     iniciarBuscadorHistorial();
 }
 
@@ -612,44 +611,11 @@ function calcularEstadisticas() {
         .where("fecha", ">=", primerDia)
         .onSnapshot((snapshot) => {
             let recaudadoMes = 0;
-            const saldos = {};
-
             snapshot.forEach(doc => {
                 const d = doc.data();
                 if (d.payMethod !== "Debe") recaudadoMes += Number(d.amount);
-
-                if (!saldos[d.userName]) saldos[d.userName] = { deuda: 0, curso: d.userCourse || "" };
-                if (d.payMethod === "Debe")  saldos[d.userName].deuda += Number(d.amount);
-                if (d.payMethod === "Abono") saldos[d.userName].deuda -= Number(d.amount);
             });
-
             document.getElementById('stat-mes').textContent = `$${recaudadoMes.toLocaleString('es-AR')}`;
-
-            const cronicos = Object.entries(saldos)
-                .filter(([, info]) => info.deuda >= UMBRAL_DEUDOR_CRONICO)
-                .sort((a, b) => b[1].deuda - a[1].deuda);
-
-            document.getElementById('stat-cronicos').textContent = cronicos.length;
-
-            const listaEl = document.getElementById('lista-deudores');
-            listaEl.innerHTML = "";
-
-            if (cronicos.length === 0) {
-                listaEl.innerHTML = `<p class="empty-msg">Sin deudores crónicos este mes. 🎉</p>`;
-            } else {
-                cronicos.forEach(([nombre, info]) => {
-                    const div = document.createElement('div');
-                    div.className = 'deudor-item';
-                    div.innerHTML = `
-                        <div>
-                            <div class="deudor-nombre">${nombre.toUpperCase()}</div>
-                            <div class="deudor-info">${info.curso || 'Sin curso'}</div>
-                        </div>
-                        <div class="deudor-monto">$${Math.max(0, info.deuda).toLocaleString('es-AR')}</div>
-                    `;
-                    listaEl.appendChild(div);
-                });
-            }
         });
 
     // Deuda total histórica
@@ -681,30 +647,100 @@ function calcularEstadisticas() {
 
 
 // ═══════════════════════════════════════════════════════════════
-// 12. NOTIFICACIÓN DE DEUDORES CRÓNICOS AL INICIAR
-// NOTA FUTURA: Para desactivar el aviso al entrar, comentá el setTimeout abajo.
+// 12. REPORTE DE CIERRE DE PERÍODO
 // ═══════════════════════════════════════════════════════════════
-async function notificarDeudoresCronicos() {
-    const snapshot = await db.collection("fotocopias")
-        .where("payMethod", "in", ["Debe", "Abono"])
-        .get();
+async function generarCierreMes() {
+    const desdeVal = document.getElementById('cierre-desde').value;
+    const hastaVal = document.getElementById('cierre-hasta').value;
 
-    const saldos = {};
+    if (!desdeVal || !hastaVal) { alert("Seleccioná las dos fechas para generar el reporte."); return; }
+
+    const desde = new Date(desdeVal);
+    const hasta = new Date(hastaVal);
+    hasta.setDate(hasta.getDate() + 1); // inclusive
+
+    if (desde > hasta) { alert("La fecha 'Desde' debe ser anterior a 'Hasta'."); return; }
+
+    let consulta = db.collection("fotocopias")
+        .where("fecha", ">=", desde)
+        .where("fecha", "<", hasta);
+
+    const snapshot = await consulta.get();
+
+    const saldos     = {};
+    let recaudado    = 0;
+
     snapshot.forEach(doc => {
         const d = doc.data();
-        if (!saldos[d.userName]) saldos[d.userName] = 0;
-        if (d.payMethod === "Debe")  saldos[d.userName] += Number(d.amount);
-        if (d.payMethod === "Abono") saldos[d.userName] -= Number(d.amount);
+        if (!saldos[d.userName]) saldos[d.userName] = { deuda: 0, curso: d.userCourse || "" };
+        if (d.payMethod === "Debe")  saldos[d.userName].deuda += Number(d.amount);
+        if (d.payMethod === "Abono") saldos[d.userName].deuda -= Number(d.amount);
+        if (d.payMethod !== "Debe")  recaudado += Number(d.amount);
     });
 
-    const cronicos = Object.entries(saldos).filter(([, deuda]) => deuda >= UMBRAL_DEUDOR_CRONICO);
+    // Solo los que tienen deuda > 0
+    const deudores = Object.entries(saldos)
+        .map(([nombre, info]) => ({ nombre, curso: info.curso, deuda: Math.max(0, info.deuda) }))
+        .filter(d => d.deuda > 0)
+        .sort((a, b) => b.deuda - a.deuda);
 
-    if (cronicos.length > 0) {
-        const nombres = cronicos.map(([n]) => n.toUpperCase()).join(", ");
-        setTimeout(() => {
-            alert(`⚠️ Hay ${cronicos.length} deudor(es) crónico(s):\n\n${nombres}\n\nRevisá la pestaña Estadísticas.`);
-        }, 1000);
+    const deudaTotal = deudores.reduce((s, d) => s + d.deuda, 0);
+
+    const formatFecha = (v) => new Date(v + 'T00:00:00').toLocaleDateString('es-AR');
+    document.getElementById('cierre-titulo-periodo').textContent =
+        `Período: ${formatFecha(desdeVal)} → ${formatFecha(hastaVal)}`;
+    document.getElementById('cierre-recaudado').textContent   = `$${recaudado.toLocaleString('es-AR')}`;
+    document.getElementById('cierre-deuda-total').textContent = `$${deudaTotal.toLocaleString('es-AR')}`;
+
+    const listaEl = document.getElementById('cierre-lista-deudores');
+    listaEl.innerHTML = "";
+
+    if (deudores.length === 0) {
+        listaEl.innerHTML = `<p class="empty-msg">Sin deudores en este período. 🎉</p>`;
+    } else {
+        deudores.forEach(({ nombre, curso, deuda }) => {
+            const div = document.createElement('div');
+            div.className = 'deudor-item';
+            div.innerHTML = `
+                <div>
+                    <div class="deudor-nombre">${nombre.toUpperCase()}</div>
+                    <div class="deudor-info">${curso || 'Sin curso'}</div>
+                </div>
+                <div class="deudor-monto">$${deuda.toLocaleString('es-AR')}</div>
+            `;
+            listaEl.appendChild(div);
+        });
     }
+
+    document.getElementById('cierre-resultado').style.display = 'block';
+    document.getElementById('cierre-resultado').scrollIntoView({ behavior: 'smooth' });
+}
+
+function imprimirCierre() {
+    const periodo   = document.getElementById('cierre-titulo-periodo').textContent;
+    const recaudado = document.getElementById('cierre-recaudado').textContent;
+    const deuda     = document.getElementById('cierre-deuda-total').textContent;
+    const items     = document.querySelectorAll('#cierre-lista-deudores .deudor-item');
+
+    let filas = "";
+    items.forEach(item => {
+        const nombre = item.querySelector('.deudor-nombre').textContent;
+        const curso  = item.querySelector('.deudor-info').textContent;
+        const monto  = item.querySelector('.deudor-monto').textContent;
+        filas += `<tr><td>${nombre}</td><td>${curso}</td><td style="font-weight:700;color:#dc2626;">${monto}</td></tr>`;
+    });
+
+    document.getElementById('print-area').innerHTML = `
+        <div class="print-title">ESRN 135 — Reporte de Cierre</div>
+        <div class="print-subtitle">${periodo} · Generado el ${new Date().toLocaleDateString('es-AR')}</div>
+        <div class="print-saldo">Recaudado: ${recaudado} &nbsp;|&nbsp; Total adeudado: ${deuda}</div>
+        <table class="print-table">
+            <thead><tr><th>Nombre</th><th>Curso</th><th>Saldo deudor</th></tr></thead>
+            <tbody>${filas || '<tr><td colspan="3" style="text-align:center;">Sin deudores en este período</td></tr>'}</tbody>
+        </table>
+        <p style="margin-top:16px; font-size:0.8rem; color:#555;">Alias: esrn135 · WhatsApp: 2920-298994</p>
+    `;
+    window.print();
 }
 
 

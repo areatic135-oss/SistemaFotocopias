@@ -270,14 +270,46 @@
                         <span class="stat-label">Total adeudado</span>
                         <span id="stat-deuda" class="stat-value red">$0</span>
                     </div>
-                    <div class="stat-card">
-                        <span class="stat-icon">⚠️</span>
-                        <span class="stat-label">Deudores crónicos</span>
-                        <span id="stat-cronicos" class="stat-value orange">0</span>
-                    </div>
                 </div>
-                <h5>Deudores con más de $2.000</h5>
-                <div id="lista-deudores" class="deudores-list"></div>
+
+                <!-- REPORTE DE CIERRE DE MES -->
+                <div class="cierre-box">
+                    <h5>📆 Reporte de Cierre de Período</h5>
+                    <p class="cierre-desc">Elegí el rango de fechas para generar el reporte con todos los deudores y totales.</p>
+                    <div class="form-row">
+                        <div class="field-group">
+                            <label>Desde</label>
+                            <input type="date" id="cierre-desde">
+                        </div>
+                        <div class="field-group">
+                            <label>Hasta</label>
+                            <input type="date" id="cierre-hasta">
+                        </div>
+                    </div>
+                    <button onclick="generarCierreMes()" class="btn-main">Generar Reporte</button>
+                </div>
+                <div id="cierre-resultado" style="display:none;">
+                    <div class="cierre-resumen-header">
+                        <div>
+                            <h5 id="cierre-titulo-periodo"></h5>
+                        </div>
+                        <button onclick="imprimirCierre()" class="btn-imprimir">🖨️ Imprimir / PDF</button>
+                    </div>
+                    <div class="stats-grid" style="margin-bottom:16px;">
+                        <div class="stat-card">
+                            <span class="stat-icon">💵</span>
+                            <span class="stat-label">Recaudado</span>
+                            <span id="cierre-recaudado" class="stat-value green">$0</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-icon">📋</span>
+                            <span class="stat-label">Total adeudado</span>
+                            <span id="cierre-deuda-total" class="stat-value red">$0</span>
+                        </div>
+                    </div>
+                    <h5>Todos los deudores del período</h5>
+                    <div id="cierre-lista-deudores" class="deudores-list"></div>
+                </div>
             </section>
 
         </main>
