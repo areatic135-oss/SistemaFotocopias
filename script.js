@@ -375,6 +375,15 @@ async function abrirEdicion(docId) {
         document.getElementById('edit-metodo').value = data.payMethod  || 'Debe';
         document.getElementById('edit-nota').value   = data.nota       || '';
 
+        // Carga la fecha actual del registro en el campo de edición
+        if (data.fecha) {
+            const d = new Date(data.fecha.seconds * 1000);
+            const iso = d.toISOString().split('T')[0];
+            document.getElementById('edit-fecha').value = iso;
+        } else {
+            document.getElementById('edit-fecha').value = '';
+        }
+
         document.getElementById('modal-editar').style.display = 'flex';
     } catch (error) {
         alert("Error al cargar el registro: " + error.message);
@@ -391,6 +400,7 @@ async function guardarEdicion() {
     if (!nombre)                    { alert("El nombre no puede estar vacío."); return; }
     if (isNaN(monto) || monto <= 0) { alert("Ingresá un monto válido."); return; }
 
+    const fechaVal = document.getElementById('edit-fecha').value;
     const cambios = {
         userName:   nombre,
         userCourse: document.getElementById('edit-curso').value.trim(),
@@ -398,6 +408,11 @@ async function guardarEdicion() {
         payMethod:  document.getElementById('edit-metodo').value,
         nota:       document.getElementById('edit-nota').value.trim()
     };
+
+    // Solo actualiza la fecha si el usuario la modificó
+    if (fechaVal) {
+        cambios.fecha = firebase.firestore.Timestamp.fromDate(new Date(fechaVal + 'T12:00:00'));
+    }
 
     try {
         await db.collection("fotocopias").doc(docEditandoId).update(cambios);
@@ -432,12 +447,20 @@ function eliminarRegistro(docId) {
 }
 
 // Saldar deuda completa (cambia el método a Efectivo)
-function saldarDeuda(docId) {
-    if (!confirm("¿Confirmás que este movimiento fue pagado completamente?")) return;
+async function saldarDeuda(docId) {
+    try {
+        const docSnap = await db.collection("fotocopias").doc(docId).get();
+        const data    = docSnap.data();
+        const nombre  = (data.userName || "este usuario").toUpperCase();
+        const monto   = Number(data.amount).toLocaleString('es-AR');
 
-    db.collection("fotocopias").doc(docId).update({ payMethod: "Efectivo" })
-        .then(() => alert("✅ Deuda saldada."))
-        .catch(err => alert("Error: " + err.message));
+        if (!confirm(`✅ ¿Confirmás que ${nombre} pagó $${monto} en efectivo?\n\nEsta acción marcará el movimiento como pagado.`)) return;
+
+        await db.collection("fotocopias").doc(docId).update({ payMethod: "Efectivo" });
+        alert("✅ Deuda saldada correctamente.");
+    } catch (err) {
+        alert("Error: " + err.message);
+    }
 }
 
 
@@ -455,33 +478,49 @@ function iniciarBuscadorHistorial() {
     });
 }
 
-function cargarHistorialGeneral(filtros = {}) {
-    // NOTA FUTURA: Para mostrar más registros, cambiá el número en .limit(80)
-    let consulta = db.collection("fotocopias").orderBy("fecha", "desc").limit(80);
+// Variables de paginación del historial
+let _historialFiltros    = {};
+let _historialUltimoDoc  = null;
+let _historialHayMas     = false;
+const HISTORIAL_PAGINA   = 50;
 
-    if (filtros.metodo) {
-        consulta = db.collection("fotocopias")
-            .where("payMethod", "==", filtros.metodo)
-            .orderBy("fecha", "desc")
-            .limit(80);
+function cargarHistorialGeneral(filtros = {}, paginar = false) {
+    if (!paginar) {
+        _historialFiltros   = filtros;
+        _historialUltimoDoc = null;
     }
-    if (filtros.desde) consulta = consulta.where("fecha", ">=", new Date(filtros.desde));
-    if (filtros.hasta) {
-        const fin = new Date(filtros.hasta);
+
+    let base = db.collection("fotocopias").orderBy("fecha", "desc");
+
+    if (_historialFiltros.metodo) base = db.collection("fotocopias").where("payMethod", "==", _historialFiltros.metodo).orderBy("fecha", "desc");
+    if (_historialFiltros.desde)  base = base.where("fecha", ">=", new Date(_historialFiltros.desde));
+    if (_historialFiltros.hasta) {
+        const fin = new Date(_historialFiltros.hasta);
         fin.setDate(fin.getDate() + 1);
-        consulta = consulta.where("fecha", "<=", fin);
+        base = base.where("fecha", "<=", fin);
     }
 
-    consulta.onSnapshot((snapshot) => {
-        const tbody = document.getElementById('cuerpo-tabla');
-        tbody.innerHTML = "";
+    // Paginación: arranca desde el último doc visto
+    let consulta = base.limit(HISTORIAL_PAGINA + 1);
+    if (_historialUltimoDoc) consulta = base.startAfter(_historialUltimoDoc).limit(HISTORIAL_PAGINA + 1);
 
-        if (snapshot.empty) {
+    consulta.get().then((snapshot) => {
+        const docs = snapshot.docs;
+        _historialHayMas = docs.length > HISTORIAL_PAGINA;
+        const visibles   = _historialHayMas ? docs.slice(0, HISTORIAL_PAGINA) : docs;
+
+        if (visibles.length > 0) _historialUltimoDoc = visibles[visibles.length - 1];
+
+        const tbody = document.getElementById('cuerpo-tabla');
+        if (!paginar) tbody.innerHTML = "";
+
+        if (visibles.length === 0 && !paginar) {
             tbody.innerHTML = `<tr><td colspan="6" class="empty-msg">Sin registros para mostrar.</td></tr>`;
+            actualizarBtnMas();
             return;
         }
 
-        snapshot.forEach(doc => {
+        visibles.forEach(doc => {
             const d     = doc.data();
             const id    = doc.id;
             const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
@@ -512,7 +551,19 @@ function cargarHistorialGeneral(filtros = {}) {
                 fila.style.display = fila.textContent.toLowerCase().includes(query) ? '' : 'none';
             });
         }
+
+        actualizarBtnMas();
     });
+}
+
+function actualizarBtnMas() {
+    let btn = document.getElementById('btn-cargar-mas');
+    if (!btn) return;
+    btn.style.display = _historialHayMas ? 'inline-block' : 'none';
+}
+
+function cargarMasHistorial() {
+    if (_historialHayMas) cargarHistorialGeneral(_historialFiltros, true);
 }
 
 function aplicarFiltros() {

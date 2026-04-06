@@ -44,6 +44,10 @@
                 </select>
             </div>
             <div class="field-group">
+                <label>Fecha del movimiento</label>
+                <input type="date" id="edit-fecha">
+            </div>
+            <div class="field-group">
                 <label>Nota / Observación</label>
                 <input type="text" id="edit-nota" placeholder="Opcional...">
             </div>
@@ -244,7 +248,8 @@
                     </table>
                 </div>
                 <div class="historial-footer">
-                    <button onclick="exportarCSV()" class="btn-export">⬇️ Exportar CSV</button>
+                    <button id="btn-cargar-mas" onclick="cargarMasHistorial()" class="btn-export" style="display:none;">⬇️ Cargar más registros</button>
+                    <button onclick="exportarCSV()" class="btn-export">📄 Exportar CSV</button>
                 </div>
             </section>
 

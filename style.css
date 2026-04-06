@@ -690,7 +690,7 @@ tbody tr:last-child td { border-bottom: none; }
 .btn-editar:hover   { background: var(--accent); color: #fff; }
 .btn-eliminar:hover { background: var(--red);    color: #fff; }
 
-.historial-footer { margin-top: 16px; display: flex; justify-content: flex-end; }
+.historial-footer { margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .btn-export {
     padding: 9px 18px;
