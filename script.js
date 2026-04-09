@@ -291,37 +291,113 @@ function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
             saldoEl.className      = 'profile-saldo ' + (deudaActual > 0 ? '' : 'verde');
             alertaEl.style.display = deudaActual >= UMBRAL_DEUDOR_CRONICO ? 'block' : 'none';
 
-            // Renderiza cada movimiento CON botones de editar y borrar
-            snapshot.forEach(doc => {
-                const d     = doc.data();
-                const id    = doc.id;
-                const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
-                const css   = obtenerCSS(d.payMethod);
-
-                const div = document.createElement('div');
-                div.className = 'mov-item';
-                div.innerHTML = `
-                    <div style="flex:1; min-width:0;">
-                        <div class="mov-fecha">${fecha}</div>
-                        ${d.nota ? `<div class="mov-nota">${d.nota}</div>` : ''}
-                    </div>
-                    <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
-                        <span class="mov-monto" style="color:${d.payMethod === 'Debe' ? 'var(--red)' : 'var(--green)'}">
-                            ${d.payMethod === 'Abono' ? '-' : ''}$${Number(d.amount).toLocaleString('es-AR')}
-                        </span>
-                        <span class="mov-metodo ${css}">${d.payMethod}</span>
-                        <div class="mov-acciones">
-                            <button class="btn-editar"   onclick="abrirEdicion('${id}')" title="Editar">✏️</button>
-                            <button class="btn-eliminar" onclick="eliminarRegistro('${id}')" title="Borrar">🗑️</button>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(div);
-            });
+            // Guarda docs y renderiza segun tab activo
+            _perfilDocs = [];
+            snapshot.forEach(doc => _perfilDocs.push(doc));
+            renderizarMovimientos(_perfilTabActual);
+        });
         });
 
     document.getElementById('user-profile').scrollIntoView({ behavior: 'smooth' });
 }
+
+// Variables de tab de perfil
+let _perfilDocs      = [];
+let _perfilTabActual = 'todos';
+
+function mostrarMovTab(tab, btn) {
+    _perfilTabActual = tab;
+    document.querySelectorAll('.mov-tab-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderizarMovimientos(tab);
+}
+
+function renderizarMovimientos(tab) {
+    const container = document.getElementById('profile-historial');
+    container.innerHTML = '';
+    const filtrados = _perfilDocs.filter(doc => {
+        const m = doc.data().payMethod;
+        if (tab === 'deudas') return m === 'Debe';
+        if (tab === 'abonos') return m === 'Abono';
+        return true;
+    });
+    if (filtrados.length === 0) {
+        container.innerHTML = '<p class="empty-msg">Sin movimientos en esta categoría.</p>';
+        return;
+    }
+    filtrados.forEach(doc => {
+        const d     = doc.data();
+        const id    = doc.id;
+        const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
+        const css   = obtenerCSS(d.payMethod);
+        const color = d.payMethod === 'Debe' ? 'var(--red)' : 'var(--green)';
+        const signo = d.payMethod === 'Abono' ? '-' : '';
+        const div   = document.createElement('div');
+        div.className = 'mov-item';
+        div.innerHTML =
+            '<div style="flex:1; min-width:0;">'
+            + '<div class="mov-fecha">' + fecha + '</div>'
+            + (d.nota ? '<div class="mov-nota">' + d.nota + '</div>' : '')
+            + '</div>'
+            + '<div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">'
+            + '<span class="mov-monto" style="color:' + color + '">'
+            + signo + '$' + Number(d.amount).toLocaleString('es-AR')
+            + '</span>'
+            + '<span class="mov-metodo ' + css + '">' + d.payMethod + '</span>'
+            + '<div class="mov-acciones">'
+            + '<button class="btn-editar" onclick="abrirEdicion(\'' + id + '\')" title="Editar">&#9999;&#65039;</button>'
+            + '<button class="btn-eliminar" onclick="eliminarRegistro(\'' + id + '\')" title="Borrar">&#128465;&#65039;</button>'
+            + '</div></div>';
+        container.appendChild(div);
+    });
+}
+
+
+// ===============================================================
+// WHATSAPP - Aviso de deuda
+// ===============================================================
+function abrirWhatsApp() {
+    if (!usuarioSeleccionado) { alert('Seleccioná un usuario primero.'); return; }
+    const nombre = usuarioSeleccionado.nombre.toUpperCase();
+    const curso  = usuarioSeleccionado.curso || '';
+    const saldo  = document.getElementById('profile-saldo').textContent;
+    const rol    = _perfilDocs.length > 0 ? (_perfilDocs[0].data().userRole || 'Alumno') : 'Alumno';
+    const hoy    = new Date().toLocaleDateString('es-AR');
+    let msg;
+    if (rol === 'Profesor') {
+        msg = 'Hola! Te escribimos desde el Área TIC de la ESRN 135. '
+            + 'Quedó pendiente un saldo de *' + saldo + '* en concepto de fotocopias (al ' + hoy + ').\n\n'
+            + 'Podés pasar a regularizarlo personalmente o hacer una transferencia al alias *esrn135* '
+            + 'y mandarnos el comprobante a este número.\n\n'
+            + '¡Gracias! &#128075;';
+    } else {
+        msg = 'Hola, le escribimos desde el Área TIC de la ESRN 135. '
+            + 'Le informamos que su hijo/a *' + nombre + '*'
+            + (curso ? ' (' + curso + ')' : '')
+            + ' tiene un saldo pendiente de *' + saldo + '* en concepto de fotocopias (al ' + hoy + ').\n\n'
+            + 'Pueden acercarse a regularizarlo personalmente o realizarlo por transferencia al alias *esrn135*. '
+            + 'En ese caso, les pedimos que envíen el comprobante de pago a este número.\n\n'
+            + '¡Muchas gracias! &#128522;';
+    }
+    document.getElementById('wa-mensaje').value  = msg;
+    document.getElementById('wa-telefono').value = '';
+    document.getElementById('panel-whatsapp').style.display = 'block';
+    document.getElementById('panel-whatsapp').scrollIntoView({ behavior: 'smooth' });
+}
+
+function cerrarWhatsApp() {
+    document.getElementById('panel-whatsapp').style.display = 'none';
+}
+
+function enviarWhatsApp() {
+    const tel = document.getElementById('wa-telefono').value.trim().replace(/[^0-9]/g, '');
+    const msg = document.getElementById('wa-mensaje').value.trim();
+    if (!tel || tel.length < 8) { alert('Ingresá un número válido.'); return; }
+    if (!msg)                   { alert('El mensaje no puede estar vacío.'); return; }
+    window.open('https://wa.me/549' + tel + '?text=' + encodeURIComponent(msg), '_blank');
+    cerrarWhatsApp();
+}
+
 
 // ── Registrar abono parcial ──
 async function registrarAbono() {
@@ -374,12 +450,9 @@ async function abrirEdicion(docId) {
         document.getElementById('edit-monto').value  = data.amount     || '';
         document.getElementById('edit-metodo').value = data.payMethod  || 'Debe';
         document.getElementById('edit-nota').value   = data.nota       || '';
-
-        // Carga la fecha actual del registro en el campo de edición
         if (data.fecha) {
             const d = new Date(data.fecha.seconds * 1000);
-            const iso = d.toISOString().split('T')[0];
-            document.getElementById('edit-fecha').value = iso;
+            document.getElementById('edit-fecha').value = d.toISOString().split('T')[0];
         } else {
             document.getElementById('edit-fecha').value = '';
         }
@@ -408,8 +481,6 @@ async function guardarEdicion() {
         payMethod:  document.getElementById('edit-metodo').value,
         nota:       document.getElementById('edit-nota').value.trim()
     };
-
-    // Solo actualiza la fecha si el usuario la modificó
     if (fechaVal) {
         cambios.fecha = firebase.firestore.Timestamp.fromDate(new Date(fechaVal + 'T12:00:00'));
     }
@@ -446,16 +517,14 @@ function eliminarRegistro(docId) {
         .catch(err => alert("Error: " + err.message));
 }
 
-// Saldar deuda completa (cambia el método a Efectivo)
+// Saldar deuda completa
 async function saldarDeuda(docId) {
     try {
         const docSnap = await db.collection("fotocopias").doc(docId).get();
         const data    = docSnap.data();
-        const nombre  = (data.userName || "este usuario").toUpperCase();
+        const nombre  = (data.userName || 'este usuario').toUpperCase();
         const monto   = Number(data.amount).toLocaleString('es-AR');
-
-        if (!confirm(`✅ ¿Confirmás que ${nombre} pagó $${monto} en efectivo?\n\nEsta acción marcará el movimiento como pagado.`)) return;
-
+        if (!confirm('✅ ¿Confirmás que ' + nombre + ' pagó $' + monto + ' en efectivo?\n\nEsta acción marcará el movimiento como pagado.')) return;
         await db.collection("fotocopias").doc(docId).update({ payMethod: "Efectivo" });
         alert("✅ Deuda saldada correctamente.");
     } catch (err) {
@@ -478,20 +547,16 @@ function iniciarBuscadorHistorial() {
     });
 }
 
-// Variables de paginación del historial
-let _historialFiltros    = {};
-let _historialUltimoDoc  = null;
-let _historialHayMas     = false;
-const HISTORIAL_PAGINA   = 50;
+// Variables de paginacion
+let _historialFiltros   = {};
+let _historialUltimoDoc = null;
+let _historialHayMas    = false;
+const HISTORIAL_PAGINA  = 50;
 
 function cargarHistorialGeneral(filtros = {}, paginar = false) {
-    if (!paginar) {
-        _historialFiltros   = filtros;
-        _historialUltimoDoc = null;
-    }
+    if (!paginar) { _historialFiltros = filtros; _historialUltimoDoc = null; }
 
     let base = db.collection("fotocopias").orderBy("fecha", "desc");
-
     if (_historialFiltros.metodo) base = db.collection("fotocopias").where("payMethod", "==", _historialFiltros.metodo).orderBy("fecha", "desc");
     if (_historialFiltros.desde)  base = base.where("fecha", ">=", new Date(_historialFiltros.desde));
     if (_historialFiltros.hasta) {
@@ -500,22 +565,20 @@ function cargarHistorialGeneral(filtros = {}, paginar = false) {
         base = base.where("fecha", "<=", fin);
     }
 
-    // Paginación: arranca desde el último doc visto
     let consulta = base.limit(HISTORIAL_PAGINA + 1);
     if (_historialUltimoDoc) consulta = base.startAfter(_historialUltimoDoc).limit(HISTORIAL_PAGINA + 1);
 
     consulta.get().then((snapshot) => {
-        const docs = snapshot.docs;
+        const docs       = snapshot.docs;
         _historialHayMas = docs.length > HISTORIAL_PAGINA;
         const visibles   = _historialHayMas ? docs.slice(0, HISTORIAL_PAGINA) : docs;
-
         if (visibles.length > 0) _historialUltimoDoc = visibles[visibles.length - 1];
 
         const tbody = document.getElementById('cuerpo-tabla');
-        if (!paginar) tbody.innerHTML = "";
+        if (!paginar) tbody.innerHTML = '';
 
         if (visibles.length === 0 && !paginar) {
-            tbody.innerHTML = `<tr><td colspan="6" class="empty-msg">Sin registros para mostrar.</td></tr>`;
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">Sin registros para mostrar.</td></tr>';
             actualizarBtnMas();
             return;
         }
@@ -525,47 +588,41 @@ function cargarHistorialGeneral(filtros = {}, paginar = false) {
             const id    = doc.id;
             const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
             const css   = obtenerCSS(d.payMethod);
-
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${fecha}</td>
-                <td style="font-weight:600;">${d.userName ? d.userName.toUpperCase() : '---'}</td>
-                <td style="font-family:var(--font-mono); font-weight:700;">$${Number(d.amount).toLocaleString('es-AR')}</td>
-                <td><span class="badge ${css}">${d.payMethod}</span></td>
-                <td class="nota-cell" title="${d.nota || ''}">${d.nota || '—'}</td>
-                <td>
-                    <div class="acciones-cell">
-                        ${d.payMethod === 'Debe' ? `<button class="btn-pagar" onclick="saldarDeuda('${id}')">✅ Pagar</button>` : ''}
-                        <button class="btn-editar"   onclick="abrirEdicion('${id}')">✏️ Editar</button>
-                        <button class="btn-eliminar" onclick="eliminarRegistro('${id}')">🗑️ Borrar</button>
-                    </div>
-                </td>
-            `;
+            const tr    = document.createElement('tr');
+            const nota  = d.nota || '—';
+            const name  = d.userName ? d.userName.toUpperCase() : '---';
+            tr.innerHTML =
+                '<td>' + fecha + '</td>'
+                + '<td style="font-weight:600;">' + name + '</td>'
+                + '<td style="font-family:var(--font-mono); font-weight:700;">$' + Number(d.amount).toLocaleString('es-AR') + '</td>'
+                + '<td><span class="badge ' + css + '">' + d.payMethod + '</span></td>'
+                + '<td class="nota-cell" title="' + (d.nota || '') + '">' + nota + '</td>'
+                + '<td><div class="acciones-cell">'
+                + (d.payMethod === 'Debe' ? '<button class="btn-pagar" onclick="saldarDeuda(\'' + id + '\')">&#x2705; Pagar</button>' : '')
+                + '<button class="btn-editar" onclick="abrirEdicion(\'' + id + '\')">&#x270f;&#xfe0f; Editar</button>'
+                + '<button class="btn-eliminar" onclick="eliminarRegistro(\'' + id + '\')">&#x1f5d1;&#xfe0f; Borrar</button>'
+                + '</div></td>';
             tbody.appendChild(tr);
         });
 
-        // Reaplica el filtro de búsqueda si hay algo escrito
         const query = document.getElementById('historial-search').value.trim().toLowerCase();
         if (query) {
             document.querySelectorAll('#cuerpo-tabla tr').forEach(fila => {
                 fila.style.display = fila.textContent.toLowerCase().includes(query) ? '' : 'none';
             });
         }
-
         actualizarBtnMas();
     });
 }
 
 function actualizarBtnMas() {
-    let btn = document.getElementById('btn-cargar-mas');
-    if (!btn) return;
-    btn.style.display = _historialHayMas ? 'inline-block' : 'none';
+    const btn = document.getElementById('btn-cargar-mas');
+    if (btn) btn.style.display = _historialHayMas ? 'inline-block' : 'none';
 }
 
 function cargarMasHistorial() {
     if (_historialHayMas) cargarHistorialGeneral(_historialFiltros, true);
 }
-
 function aplicarFiltros() {
     cargarHistorialGeneral({
         desde:  document.getElementById('filtro-desde').value,
@@ -655,144 +712,45 @@ function calcularEstadisticas() {
     const ahora     = new Date();
     const primerDia = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
     const nombreMes = ahora.toLocaleString('es-AR', { month: 'long', year: 'numeric' });
+    const el = document.getElementById('stats-filtro-curso');
+    const filtroCurso = el ? el.value.trim().toLowerCase() : '';
 
-    document.getElementById('stats-periodo').textContent = `Período: ${nombreMes}`;
+    document.getElementById('stats-periodo').textContent =
+        filtroCurso ? 'Período: ' + nombreMes + ' · Curso: ' + filtroCurso : 'Período: ' + nombreMes;
 
-    db.collection("fotocopias")
-        .where("fecha", ">=", primerDia)
-        .onSnapshot((snapshot) => {
-            let recaudadoMes = 0;
-            snapshot.forEach(doc => {
-                const d = doc.data();
-                if (d.payMethod !== "Debe") recaudadoMes += Number(d.amount);
-            });
-            document.getElementById('stat-mes').textContent = `$${recaudadoMes.toLocaleString('es-AR')}`;
+    db.collection("fotocopias").where("fecha", ">=", primerDia).get().then((snapshot) => {
+        let recaudadoMes = 0;
+        snapshot.forEach(doc => {
+            const d = doc.data();
+            if (filtroCurso && (d.userCourse || '').toLowerCase() !== filtroCurso) return;
+            if (d.payMethod !== "Debe") recaudadoMes += Number(d.amount);
         });
+        document.getElementById('stat-mes').textContent = '$' + recaudadoMes.toLocaleString('es-AR');
+    });
 
-    // Deuda total histórica
-    db.collection("fotocopias")
-        .where("payMethod", "in", ["Debe", "Abono"])
-        .onSnapshot((snapshot) => {
-            let total = 0;
-            snapshot.forEach(doc => {
-                const d = doc.data();
-                if (d.payMethod === "Debe")  total += Number(d.amount);
-                if (d.payMethod === "Abono") total -= Number(d.amount);
-            });
-            document.getElementById('stat-deuda').textContent = `$${Math.max(0, total).toLocaleString('es-AR')}`;
+    db.collection("fotocopias").where("payMethod", "in", ["Debe", "Abono"]).onSnapshot((snapshot) => {
+        let total = 0;
+        snapshot.forEach(doc => {
+            const d = doc.data();
+            if (d.payMethod === "Debe")  total += Number(d.amount);
+            if (d.payMethod === "Abono") total -= Number(d.amount);
         });
+        document.getElementById('stat-deuda').textContent = '$' + Math.max(0, total).toLocaleString('es-AR');
+    });
 
-    // Recaudación de hoy
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
-    db.collection("fotocopias")
-        .where("fecha", ">=", hoy)
-        .onSnapshot((snapshot) => {
-            let recHoy = 0;
-            snapshot.forEach(doc => {
-                if (doc.data().payMethod !== "Debe") recHoy += Number(doc.data().amount);
-            });
-            document.getElementById('stat-hoy').textContent = `$${recHoy.toLocaleString('es-AR')}`;
+    db.collection("fotocopias").where("fecha", ">=", hoy).onSnapshot((snapshot) => {
+        let recHoy = 0;
+        snapshot.forEach(doc => {
+            if (doc.data().payMethod !== "Debe") recHoy += Number(doc.data().amount);
         });
-}
-
-
-// ═══════════════════════════════════════════════════════════════
-// 12. REPORTE DE CIERRE DE PERÍODO
-// ═══════════════════════════════════════════════════════════════
-async function generarCierreMes() {
-    const desdeVal = document.getElementById('cierre-desde').value;
-    const hastaVal = document.getElementById('cierre-hasta').value;
-
-    if (!desdeVal || !hastaVal) { alert("Seleccioná las dos fechas para generar el reporte."); return; }
-
-    const desde = new Date(desdeVal);
-    const hasta = new Date(hastaVal);
-    hasta.setDate(hasta.getDate() + 1); // inclusive
-
-    if (desde > hasta) { alert("La fecha 'Desde' debe ser anterior a 'Hasta'."); return; }
-
-    let consulta = db.collection("fotocopias")
-        .where("fecha", ">=", desde)
-        .where("fecha", "<", hasta);
-
-    const snapshot = await consulta.get();
-
-    const saldos     = {};
-    let recaudado    = 0;
-
-    snapshot.forEach(doc => {
-        const d = doc.data();
-        if (!saldos[d.userName]) saldos[d.userName] = { deuda: 0, curso: d.userCourse || "" };
-        if (d.payMethod === "Debe")  saldos[d.userName].deuda += Number(d.amount);
-        if (d.payMethod === "Abono") saldos[d.userName].deuda -= Number(d.amount);
-        if (d.payMethod !== "Debe")  recaudado += Number(d.amount);
+        document.getElementById('stat-hoy').textContent = '$' + recHoy.toLocaleString('es-AR');
     });
-
-    // Solo los que tienen deuda > 0
-    const deudores = Object.entries(saldos)
-        .map(([nombre, info]) => ({ nombre, curso: info.curso, deuda: Math.max(0, info.deuda) }))
-        .filter(d => d.deuda > 0)
-        .sort((a, b) => b.deuda - a.deuda);
-
-    const deudaTotal = deudores.reduce((s, d) => s + d.deuda, 0);
-
-    const formatFecha = (v) => new Date(v + 'T00:00:00').toLocaleDateString('es-AR');
-    document.getElementById('cierre-titulo-periodo').textContent =
-        `Período: ${formatFecha(desdeVal)} → ${formatFecha(hastaVal)}`;
-    document.getElementById('cierre-recaudado').textContent   = `$${recaudado.toLocaleString('es-AR')}`;
-    document.getElementById('cierre-deuda-total').textContent = `$${deudaTotal.toLocaleString('es-AR')}`;
-
-    const listaEl = document.getElementById('cierre-lista-deudores');
-    listaEl.innerHTML = "";
-
-    if (deudores.length === 0) {
-        listaEl.innerHTML = `<p class="empty-msg">Sin deudores en este período. 🎉</p>`;
-    } else {
-        deudores.forEach(({ nombre, curso, deuda }) => {
-            const div = document.createElement('div');
-            div.className = 'deudor-item';
-            div.innerHTML = `
-                <div>
-                    <div class="deudor-nombre">${nombre.toUpperCase()}</div>
-                    <div class="deudor-info">${curso || 'Sin curso'}</div>
-                </div>
-                <div class="deudor-monto">$${deuda.toLocaleString('es-AR')}</div>
-            `;
-            listaEl.appendChild(div);
-        });
-    }
-
-    document.getElementById('cierre-resultado').style.display = 'block';
-    document.getElementById('cierre-resultado').scrollIntoView({ behavior: 'smooth' });
 }
 
-function imprimirCierre() {
-    const periodo   = document.getElementById('cierre-titulo-periodo').textContent;
-    const recaudado = document.getElementById('cierre-recaudado').textContent;
-    const deuda     = document.getElementById('cierre-deuda-total').textContent;
-    const items     = document.querySelectorAll('#cierre-lista-deudores .deudor-item');
 
-    let filas = "";
-    items.forEach(item => {
-        const nombre = item.querySelector('.deudor-nombre').textContent;
-        const curso  = item.querySelector('.deudor-info').textContent;
-        const monto  = item.querySelector('.deudor-monto').textContent;
-        filas += `<tr><td>${nombre}</td><td>${curso}</td><td style="font-weight:700;color:#dc2626;">${monto}</td></tr>`;
-    });
 
-    document.getElementById('print-area').innerHTML = `
-        <div class="print-title">ESRN 135 — Reporte de Cierre</div>
-        <div class="print-subtitle">${periodo} · Generado el ${new Date().toLocaleDateString('es-AR')}</div>
-        <div class="print-saldo">Recaudado: ${recaudado} &nbsp;|&nbsp; Total adeudado: ${deuda}</div>
-        <table class="print-table">
-            <thead><tr><th>Nombre</th><th>Curso</th><th>Saldo deudor</th></tr></thead>
-            <tbody>${filas || '<tr><td colspan="3" style="text-align:center;">Sin deudores en este período</td></tr>'}</tbody>
-        </table>
-        <p style="margin-top:16px; font-size:0.8rem; color:#555;">Alias: esrn135 · WhatsApp: 2920-298994</p>
-    `;
-    window.print();
-}
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -807,4 +765,99 @@ function obtenerCSS(metodo) {
         case "Abono":         return "metodo-abono";
         default:              return "";
     }
+let _cierreDeudores = [];
+let _cierreDesdeVal = '';
+let _cierreHastaVal = '';
+
+async function generarCierreMes() {
+    const desdeVal = document.getElementById('cierre-desde').value;
+    const hastaVal = document.getElementById('cierre-hasta').value;
+    if (!desdeVal || !hastaVal) { alert('Seleccioná las dos fechas.'); return; }
+    const desde = new Date(desdeVal);
+    const hasta = new Date(hastaVal);
+    hasta.setDate(hasta.getDate() + 1);
+    if (desde > hasta) { alert('La fecha Desde debe ser anterior a Hasta.'); return; }
+
+    const snapshot = await db.collection('fotocopias')
+        .where('fecha', '>=', desde).where('fecha', '<', hasta).get();
+
+    const saldos  = {};
+    let recaudado = 0;
+    const metodos = { Efectivo: 0, Transferencia: 0, Abono: 0 };
+
+    snapshot.forEach(doc => {
+        const d = doc.data();
+        if (!saldos[d.userName]) saldos[d.userName] = { deuda: 0, curso: d.userCourse || '' };
+        if (d.payMethod === 'Debe')                  saldos[d.userName].deuda += Number(d.amount);
+        if (d.payMethod === 'Abono')                 saldos[d.userName].deuda -= Number(d.amount);
+        if (d.payMethod !== 'Debe')                  recaudado += Number(d.amount);
+        if (metodos[d.payMethod] !== undefined)      metodos[d.payMethod] += Number(d.amount);
+    });
+
+    _cierreDeudores = Object.entries(saldos)
+        .map(([nombre, info]) => ({ nombre, curso: info.curso, deuda: Math.max(0, info.deuda) }))
+        .filter(d => d.deuda > 0)
+        .sort((a, b) => b.deuda - a.deuda);
+    _cierreDesdeVal = desdeVal;
+    _cierreHastaVal = hastaVal;
+
+    const deudaTotal  = _cierreDeudores.reduce((s, d) => s + d.deuda, 0);
+    const ff = v => new Date(v + 'T00:00:00').toLocaleDateString('es-AR');
+
+    document.getElementById('cierre-titulo-periodo').textContent =
+        'Período: ' + ff(desdeVal) + ' → ' + ff(hastaVal);
+    document.getElementById('cierre-recaudado').textContent   = '$' + recaudado.toLocaleString('es-AR');
+    document.getElementById('cierre-deuda-total').textContent = '$' + deudaTotal.toLocaleString('es-AR');
+
+    document.getElementById('cierre-metodos').innerHTML =
+        '<div class="cierre-metodos-grid">'
+        + '<div class="metodo-resumen-item"><span class="metodo-resumen-label">&#128181; Efectivo</span><span class="metodo-resumen-valor">$' + metodos.Efectivo.toLocaleString('es-AR') + '</span></div>'
+        + '<div class="metodo-resumen-item"><span class="metodo-resumen-label">&#128241; Transferencia</span><span class="metodo-resumen-valor">$' + metodos.Transferencia.toLocaleString('es-AR') + '</span></div>'
+        + '<div class="metodo-resumen-item"><span class="metodo-resumen-label">&#9989; Abonos</span><span class="metodo-resumen-valor">$' + metodos.Abono.toLocaleString('es-AR') + '</span></div>'
+        + '</div>';
+
+    document.getElementById('cierre-buscador').value = '';
+    renderizarCierreDeudores(_cierreDeudores);
+    document.getElementById('cierre-resultado').style.display = 'block';
+    document.getElementById('cierre-resultado').scrollIntoView({ behavior: 'smooth' });
+}
+
+function renderizarCierreDeudores(lista) {
+    const el = document.getElementById('cierre-lista-deudores');
+    el.innerHTML = '';
+    if (lista.length === 0) {
+        el.innerHTML = '<p class="empty-msg">Sin deudores en este período. &#127881;</p>';
+        return;
+    }
+    lista.forEach(({ nombre, curso, deuda }) => {
+        const div = document.createElement('div');
+        div.className = 'deudor-item';
+        div.innerHTML =
+            '<div><div class="deudor-nombre">' + nombre.toUpperCase() + '</div>'
+            + '<div class="deudor-info">' + (curso || 'Sin curso') + '</div></div>'
+            + '<div class="deudor-monto">$' + deuda.toLocaleString('es-AR') + '</div>';
+        el.appendChild(div);
+    });
+}
+
+function filtrarCierreDeudores() {
+    const q = document.getElementById('cierre-buscador').value.trim().toLowerCase();
+    renderizarCierreDeudores(q
+        ? _cierreDeudores.filter(d => d.nombre.includes(q) || d.curso.toLowerCase().includes(q))
+        : _cierreDeudores);
+}
+
+function exportarCierreCSV() {
+    if (_cierreDesdeVal === '') { alert('Primero generá el reporte.'); return; }
+    const ff = v => new Date(v + 'T00:00:00').toLocaleDateString('es-AR');
+    let csv = '﻿Nombre,Curso,Saldo deudor\n';
+    _cierreDeudores.forEach(({ nombre, curso, deuda }) => {
+        csv += '"' + nombre + '","' + (curso || '') + '",' + deuda + '\n';
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'Cierre_ESRN135_' + ff(_cierreDesdeVal).replace(/\//g, '-') + '_al_' + ff(_cierreHastaVal).replace(/\//g, '-') + '.csv';
+    link.click();
+}
 }

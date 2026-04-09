@@ -182,10 +182,27 @@
                             <span id="profile-saldo" class="profile-saldo">$0</span>
                         </div>
                     </div>
-                    <div id="alerta-deudor" class="alerta-deudor" style="display:none;">
-                        ⚠️ DEUDOR CRÓNICO — debe más de $5.000
+                    <div class="profile-acciones-bar">
+                        <button onclick="imprimirResumen()" class="btn-imprimir">&#128248;&#65039; Imprimir</button>
+                        <button onclick="abrirWhatsApp()" class="btn-whatsapp">&#128242; Avisar por WhatsApp</button>
                     </div>
-                    <button onclick="imprimirResumen()" class="btn-imprimir">🖨️ Resumen para imprimir / WhatsApp</button>
+
+                    <div id="panel-whatsapp" class="panel-whatsapp" style="display:none;">
+                        <h5>&#128242; Enviar aviso por WhatsApp</h5>
+                        <div class="field-group">
+                            <label>Número de teléfono (sin 0 ni 15)</label>
+                            <input type="tel" id="wa-telefono" placeholder="Ej: 2920123456" maxlength="20">
+                        </div>
+                        <div class="field-group">
+                            <label>Mensaje (podés editarlo antes de enviar)</label>
+                            <textarea id="wa-mensaje" class="wa-textarea" rows="7"></textarea>
+                        </div>
+                        <div class="modal-actions">
+                            <button onclick="cerrarWhatsApp()" class="btn-cancelar">Cancelar</button>
+                            <button onclick="enviarWhatsApp()" class="btn-whatsapp-send">Abrir WhatsApp &#8594;</button>
+                        </div>
+                    </div>
+
                     <div class="pago-parcial-box">
                         <h5>Registrar Abono</h5>
                         <div class="form-row">
@@ -195,9 +212,14 @@
                                 <option value="Transferencia">Transferencia</option>
                             </select>
                         </div>
-                        <button onclick="registrarAbono()" class="btn-abono">✅ Registrar Abono</button>
+                        <button onclick="registrarAbono()" class="btn-abono">&#9989; Registrar Abono</button>
                     </div>
-                    <h5 style="margin-top:20px;">Movimientos del usuario</h5>
+
+                    <div class="movimientos-tabs">
+                        <button class="mov-tab-btn active" onclick="mostrarMovTab('todos', this)">&#128194; Todos</button>
+                        <button class="mov-tab-btn" onclick="mostrarMovTab('deudas', this)">&#128204; Deudas</button>
+                        <button class="mov-tab-btn" onclick="mostrarMovTab('abonos', this)">&#9989; Abonos</button>
+                    </div>
                     <div id="profile-historial" class="profile-historial-container"></div>
                 </div>
             </section>
@@ -248,8 +270,8 @@
                     </table>
                 </div>
                 <div class="historial-footer">
-                    <button id="btn-cargar-mas" onclick="cargarMasHistorial()" class="btn-export" style="display:none;">⬇️ Cargar más registros</button>
-                    <button onclick="exportarCSV()" class="btn-export">📄 Exportar CSV</button>
+                    <button id="btn-cargar-mas" onclick="cargarMasHistorial()" class="btn-export" style="display:none;">⬇️ Cargar más</button>
+                    <button onclick="exportarCSV()" class="btn-export">&#128196; Exportar CSV</button>
                 </div>
             </section>
 
@@ -275,42 +297,39 @@
                         <span class="stat-label">Total adeudado</span>
                         <span id="stat-deuda" class="stat-value red">$0</span>
                     </div>
+
+                <div class="field-group" style="margin-bottom:20px;">
+                    <label>Filtrar estadísticas por curso</label>
+                    <div class="form-row">
+                        <input type="text" id="stats-filtro-curso" placeholder="Ej: 4to 2da (dejá vacío para ver todo)">
+                        <button onclick="calcularEstadisticas()" class="btn-filtrar">Filtrar</button>
+                    </div>
                 </div>
 
-                <!-- REPORTE DE CIERRE DE MES -->
                 <div class="cierre-box">
-                    <h5>📆 Reporte de Cierre de Período</h5>
-                    <p class="cierre-desc">Elegí el rango de fechas para generar el reporte con todos los deudores y totales.</p>
+                    <h5>&#128198; Reporte de Cierre de Período</h5>
+                    <p class="cierre-desc">Elegí el rango de fechas para generar el reporte.</p>
                     <div class="form-row">
-                        <div class="field-group">
-                            <label>Desde</label>
-                            <input type="date" id="cierre-desde">
-                        </div>
-                        <div class="field-group">
-                            <label>Hasta</label>
-                            <input type="date" id="cierre-hasta">
-                        </div>
+                        <div class="field-group"><label>Desde</label><input type="date" id="cierre-desde"></div>
+                        <div class="field-group"><label>Hasta</label><input type="date" id="cierre-hasta"></div>
                     </div>
                     <button onclick="generarCierreMes()" class="btn-main">Generar Reporte</button>
                 </div>
                 <div id="cierre-resultado" style="display:none;">
                     <div class="cierre-resumen-header">
-                        <div>
-                            <h5 id="cierre-titulo-periodo"></h5>
+                        <h5 id="cierre-titulo-periodo"></h5>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button onclick="exportarCierreCSV()" class="btn-export">&#11015;&#65039; CSV</button>
+                            <button onclick="imprimirCierre()" class="btn-imprimir">&#128248;&#65039; Imprimir / PDF</button>
                         </div>
-                        <button onclick="imprimirCierre()" class="btn-imprimir">🖨️ Imprimir / PDF</button>
                     </div>
-                    <div class="stats-grid" style="margin-bottom:16px;">
-                        <div class="stat-card">
-                            <span class="stat-icon">💵</span>
-                            <span class="stat-label">Recaudado</span>
-                            <span id="cierre-recaudado" class="stat-value green">$0</span>
-                        </div>
-                        <div class="stat-card">
-                            <span class="stat-icon">📋</span>
-                            <span class="stat-label">Total adeudado</span>
-                            <span id="cierre-deuda-total" class="stat-value red">$0</span>
-                        </div>
+                    <div class="stats-grid" style="margin-bottom:12px;">
+                        <div class="stat-card"><span class="stat-icon">&#128181;</span><span class="stat-label">Recaudado</span><span id="cierre-recaudado" class="stat-value green">$0</span></div>
+                        <div class="stat-card"><span class="stat-icon">&#128203;</span><span class="stat-label">Total adeudado</span><span id="cierre-deuda-total" class="stat-value red">$0</span></div>
+                    </div>
+                    <div class="cierre-metodos" id="cierre-metodos"></div>
+                    <div class="field-group" style="margin:14px 0 8px;">
+                        <input type="text" id="cierre-buscador" placeholder="&#128269; Buscar deudor..." oninput="filtrarCierreDeudores()">
                     </div>
                     <h5>Todos los deudores del período</h5>
                     <div id="cierre-lista-deudores" class="deudores-list"></div>

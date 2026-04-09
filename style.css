@@ -690,7 +690,7 @@ tbody tr:last-child td { border-bottom: none; }
 .btn-editar:hover   { background: var(--accent); color: #fff; }
 .btn-eliminar:hover { background: var(--red);    color: #fff; }
 
-.historial-footer { margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.historial-footer { margin-top: 16px; display: flex; justify-content: flex-end; }
 
 .btn-export {
     padding: 9px 18px;
@@ -706,36 +706,6 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 .btn-export:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
-
-/* ═══════════════════════════════════════════════════════════════
-   REPORTE CIERRE DE MES
-   ═══════════════════════════════════════════════════════════════ */
-.cierre-box {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 20px;
-    margin-top: 4px;
-    margin-bottom: 20px;
-    box-shadow: var(--shadow);
-}
-
-.cierre-box h5 { margin-bottom: 6px; }
-
-.cierre-desc {
-    font-size: 0.82rem;
-    color: var(--text-muted);
-    margin-bottom: 16px;
-}
-
-.cierre-resumen-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-}
-
-.cierre-resumen-header h5 { margin-bottom: 0; }
 
 /* ═══════════════════════════════════════════════════════════════
    ESTADÍSTICAS
@@ -928,4 +898,155 @@ h5 {
     .profile-saldo-box { text-align: left; }
     .acciones-cell { flex-direction: column; }
     .mov-item      { flex-wrap: wrap; }
+}
+/* ═══════════════════════════════════════════════════════════════
+   TANDA 2 — WhatsApp + Tabs movimientos + Cierre metodos
+   ═══════════════════════════════════════════════════════════════ */
+
+.profile-acciones-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+.profile-acciones-bar .btn-imprimir { flex: 1; }
+
+.btn-whatsapp {
+    flex: 1;
+    padding: 10px 16px;
+    background: #25d366;
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+    text-align: center;
+}
+.btn-whatsapp:hover { background: #1ebe5d; }
+
+.panel-whatsapp {
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 16px;
+}
+.panel-whatsapp h5 { color: #16a34a; margin-bottom: 14px; }
+
+.wa-textarea {
+    width: 100%;
+    padding: 11px 14px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-main);
+    font-size: 0.9rem;
+    resize: vertical;
+    line-height: 1.5;
+}
+.wa-textarea:focus {
+    outline: none;
+    border-color: #25d366;
+    box-shadow: 0 0 0 3px rgba(37,211,102,0.15);
+}
+
+.btn-whatsapp-send {
+    flex: 2;
+    padding: 12px;
+    background: #25d366;
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s;
+}
+.btn-whatsapp-send:hover { background: #1ebe5d; }
+
+.movimientos-tabs {
+    display: flex;
+    gap: 6px;
+    margin: 18px 0 10px;
+    border-bottom: 2px solid var(--border);
+}
+.mov-tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    color: var(--text-muted);
+    padding: 8px 14px;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.mov-tab-btn:hover { color: var(--text); }
+.mov-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.cierre-metodos { margin-bottom: 14px; }
+.cierre-metodos-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+.metodo-resumen-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.metodo-resumen-label {
+    font-size: 0.68rem;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 600;
+}
+.metodo-resumen-valor {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--green);
+}
+
+.cierre-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+}
+.cierre-box h5 { margin-bottom: 6px; }
+.cierre-desc { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 16px; }
+.cierre-resumen-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.cierre-resumen-header h5 { margin-bottom: 0; }
+
+.historial-footer { margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+@media (max-width: 480px) {
+    .cierre-metodos-grid { grid-template-columns: 1fr; }
+    .movimientos-tabs    { flex-wrap: wrap; }
+    .profile-acciones-bar { flex-direction: column; }
 }
