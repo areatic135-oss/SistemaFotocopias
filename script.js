@@ -142,7 +142,7 @@ document.getElementById('copy-form').addEventListener('submit', async (e) => {
     const nombre = document.getElementById('user-name').value.trim().toLowerCase();
     const monto  = parseFloat(document.getElementById('custom-amount').value);
 
-    if (!nombre)                    { alert("Ingresá el nombre del usuario."); return; }
+    if (!nombre)                     { alert("Ingresá el nombre del usuario."); return; }
     if (isNaN(monto) || monto <= 0) { alert("Ingresá un monto válido."); return; }
 
     const datos = {
@@ -150,9 +150,7 @@ document.getElementById('copy-form').addEventListener('submit', async (e) => {
         userCourse: document.getElementById('user-course').value.trim(),
         userRole:   document.getElementById('user-role').value,
         amount:     monto,
-        // NOTA FUTURA: payMethod puede ser: "Debe", "Efectivo", "Transferencia", "Abono"
         payMethod:  document.getElementById('pay-method').value,
-        // NOTA FUTURA: "nota" es opcional; se guarda vacío si no se completa
         nota:       document.getElementById('nota-registro').value.trim(),
         fecha:      firebase.firestore.FieldValue.serverTimestamp()
     };
@@ -220,7 +218,6 @@ document.getElementById('search-input').addEventListener('input', async (e) => {
         return;
     }
 
-    // Agrupa por nombre y calcula saldo neto
     const usuarios = {};
     snapshot.forEach(doc => {
         const d = doc.data();
@@ -249,8 +246,6 @@ document.getElementById('search-input').addEventListener('input', async (e) => {
     });
 });
 
-// ── Cargar perfil completo de un usuario ──
-// Muestra saldo, alerta, abono y TODOS sus movimientos con botón editar/borrar
 function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
     usuarioSeleccionado = { nombre, curso };
 
@@ -265,7 +260,6 @@ function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
     saldoEl.className      = 'profile-saldo ' + (saldoDeuda > 0 ? '' : 'verde');
     alertaEl.style.display = saldoDeuda >= UMBRAL_DEUDOR_CRONICO ? 'block' : 'none';
 
-    // Escucha en tiempo real los movimientos del usuario
     db.collection("fotocopias")
         .where("userName", "==", nombre)
         .orderBy("fecha", "desc")
@@ -278,7 +272,6 @@ function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
                 return;
             }
 
-            // Recalcula el saldo en tiempo real después de cada cambio
             let deudaActual = 0;
             snapshot.forEach(doc => {
                 const d = doc.data();
@@ -291,17 +284,14 @@ function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
             saldoEl.className      = 'profile-saldo ' + (deudaActual > 0 ? '' : 'verde');
             alertaEl.style.display = deudaActual >= UMBRAL_DEUDOR_CRONICO ? 'block' : 'none';
 
-            // Guarda docs y renderiza segun tab activo
             _perfilDocs = [];
             snapshot.forEach(doc => _perfilDocs.push(doc));
             renderizarMovimientos(_perfilTabActual);
         });
-        };
-
+        
     document.getElementById('user-profile').scrollIntoView({ behavior: 'smooth' });
+}
 
-
-// Variables de tab de perfil
 let _perfilDocs      = [];
 let _perfilTabActual = 'todos';
 
@@ -327,7 +317,7 @@ function renderizarMovimientos(tab) {
     }
     filtrados.forEach(doc => {
         const d     = doc.data();
-        const id    = doc.id;
+        const id     = doc.id;
         const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
         const css   = obtenerCSS(d.payMethod);
         const color = d.payMethod === 'Debe' ? 'var(--red)' : 'var(--green)';
@@ -369,7 +359,7 @@ function abrirWhatsApp() {
             + 'Quedó pendiente un saldo de *' + saldo + '* en concepto de fotocopias (al ' + hoy + ').\n\n'
             + 'Podés pasar a regularizarlo personalmente o hacer una transferencia al alias *esrn135* '
             + 'y mandarnos el comprobante a este número.\n\n'
-            + '¡Gracias! &#128075;';
+            + '¡Gracias! 👋';
     } else {
         msg = 'Hola, le escribimos desde el Área TIC de la ESRN 135. '
             + 'Le informamos que su hijo/a *' + nombre + '*'
@@ -377,7 +367,7 @@ function abrirWhatsApp() {
             + ' tiene un saldo pendiente de *' + saldo + '* en concepto de fotocopias (al ' + hoy + ').\n\n'
             + 'Pueden acercarse a regularizarlo personalmente o realizarlo por transferencia al alias *esrn135*. '
             + 'En ese caso, les pedimos que envíen el comprobante de pago a este número.\n\n'
-            + '¡Muchas gracias! &#128522;';
+            + '¡Muchas gracias! 😊';
     }
     document.getElementById('wa-mensaje').value  = msg;
     document.getElementById('wa-telefono').value = '';
@@ -399,7 +389,6 @@ function enviarWhatsApp() {
 }
 
 
-// ── Registrar abono parcial ──
 async function registrarAbono() {
     if (!usuarioSeleccionado) { alert("Seleccioná un usuario primero."); return; }
 
@@ -414,7 +403,6 @@ async function registrarAbono() {
         userCourse:  usuarioSeleccionado.curso || "",
         userRole:    "Alumno",
         amount:      monto,
-        // NOTA FUTURA: Los abonos se descuentan automáticamente del saldo
         payMethod:   "Abono",
         abonoMetodo: metodo,
         nota:        `Abono en ${metodo}`,
@@ -433,11 +421,8 @@ async function registrarAbono() {
 
 // ═══════════════════════════════════════════════════════════════
 // 6. EDITAR REGISTRO
-// Funciona tanto desde el historial general como desde el perfil
-// del usuario en el tab Buscar.
 // ═══════════════════════════════════════════════════════════════
 
-// Abre el modal y carga los datos actuales del registro a editar
 async function abrirEdicion(docId) {
     docEditandoId = docId;
 
@@ -463,14 +448,13 @@ async function abrirEdicion(docId) {
     }
 }
 
-// Guarda los cambios del modal en Firestore
 async function guardarEdicion() {
     if (!docEditandoId) return;
 
     const nombre = document.getElementById('edit-nombre').value.trim().toLowerCase();
     const monto  = parseFloat(document.getElementById('edit-monto').value);
 
-    if (!nombre)                    { alert("El nombre no puede estar vacío."); return; }
+    if (!nombre)                     { alert("El nombre no puede estar vacío."); return; }
     if (isNaN(monto) || monto <= 0) { alert("Ingresá un monto válido."); return; }
 
     const fechaVal = document.getElementById('edit-fecha').value;
@@ -499,7 +483,6 @@ function cerrarModal() {
     docEditandoId = null;
 }
 
-// Cierra el modal al hacer clic en el fondo oscuro
 document.getElementById('modal-editar').addEventListener('click', (e) => {
     if (e.target === document.getElementById('modal-editar')) cerrarModal();
 });
@@ -507,7 +490,6 @@ document.getElementById('modal-editar').addEventListener('click', (e) => {
 
 // ═══════════════════════════════════════════════════════════════
 // 7. ELIMINAR REGISTRO
-// NOTA FUTURA: El borrado es permanente. No hay deshacer.
 // ═══════════════════════════════════════════════════════════════
 function eliminarRegistro(docId) {
     if (!confirm("⚠️ ¿Estás seguro que querés borrar este registro?\nEsta acción no se puede deshacer.")) return;
@@ -517,7 +499,6 @@ function eliminarRegistro(docId) {
         .catch(err => alert("Error: " + err.message));
 }
 
-// Saldar deuda completa
 async function saldarDeuda(docId) {
     try {
         const docSnap = await db.collection("fotocopias").doc(docId).get();
@@ -534,10 +515,9 @@ async function saldarDeuda(docId) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// 8. HISTORIAL GENERAL CON FILTROS + BUSCADOR EN TIEMPO REAL
+// 8. HISTORIAL GENERAL CON FILTROS + BUSCADOR
 // ═══════════════════════════════════════════════════════════════
 
-// Buscador instantáneo que filtra las filas visibles de la tabla
 function iniciarBuscadorHistorial() {
     document.getElementById('historial-search').addEventListener('input', (e) => {
         const query = e.target.value.trim().toLowerCase();
@@ -547,7 +527,6 @@ function iniciarBuscadorHistorial() {
     });
 }
 
-// Variables de paginacion
 let _historialFiltros   = {};
 let _historialUltimoDoc = null;
 let _historialHayMas    = false;
@@ -585,7 +564,7 @@ function cargarHistorialGeneral(filtros = {}, paginar = false) {
 
         visibles.forEach(doc => {
             const d     = doc.data();
-            const id    = doc.id;
+            const id     = doc.id;
             const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
             const css   = obtenerCSS(d.payMethod);
             const tr    = document.createElement('tr');
@@ -598,9 +577,9 @@ function cargarHistorialGeneral(filtros = {}, paginar = false) {
                 + '<td><span class="badge ' + css + '">' + d.payMethod + '</span></td>'
                 + '<td class="nota-cell" title="' + (d.nota || '') + '">' + nota + '</td>'
                 + '<td><div class="acciones-cell">'
-                + (d.payMethod === 'Debe' ? '<button class="btn-pagar" onclick="saldarDeuda(\'' + id + '\')">&#x2705; Pagar</button>' : '')
-                + '<button class="btn-editar" onclick="abrirEdicion(\'' + id + '\')">&#x270f;&#xfe0f; Editar</button>'
-                + '<button class="btn-eliminar" onclick="eliminarRegistro(\'' + id + '\')">&#x1f5d1;&#xfe0f; Borrar</button>'
+                + (d.payMethod === 'Debe' ? '<button class="btn-pagar" onclick="saldarDeuda(\'' + id + '\')">✅ Pagar</button>' : '')
+                + '<button class="btn-editar" onclick="abrirEdicion(\'' + id + '\')">✏️ Editar</button>'
+                + '<button class="btn-eliminar" onclick="eliminarRegistro(\'' + id + '\')">🗑️ Borrar</button>'
                 + '</div></td>';
             tbody.appendChild(tr);
         });
@@ -623,6 +602,7 @@ function actualizarBtnMas() {
 function cargarMasHistorial() {
     if (_historialHayMas) cargarHistorialGeneral(_historialFiltros, true);
 }
+
 function aplicarFiltros() {
     cargarHistorialGeneral({
         desde:  document.getElementById('filtro-desde').value,
@@ -633,7 +613,7 @@ function aplicarFiltros() {
 
 
 // ═══════════════════════════════════════════════════════════════
-// 9. RESUMEN IMPRIMIBLE / WHATSAPP
+// 9. RESUMEN IMPRIMIBLE
 // ═══════════════════════════════════════════════════════════════
 async function imprimirResumen() {
     if (!usuarioSeleccionado) { alert("Seleccioná un usuario primero."); return; }
@@ -750,12 +730,68 @@ function calcularEstadisticas() {
 }
 
 
+// ═══════════════════════════════════════════════════════════════
+// 12. CIERRE DE MES (NUEVO)
+// ═══════════════════════════════════════════════════════════════
+async function generarCierreMes() {
+    const desdeVal = document.getElementById('cierre-desde').value;
+    const hastaVal = document.getElementById('cierre-hasta').value;
+    
+    if (!desdeVal || !hastaVal) { alert('Seleccioná las dos fechas.'); return; }
+    
+    const desde = new Date(desdeVal + 'T00:00:00');
+    const hasta = new Date(hastaVal + 'T23:59:59');
 
+    try {
+        const snapshot = await db.collection("fotocopias")
+            .where("fecha", ">=", desde)
+            .where("fecha", "<=", hasta)
+            .get();
+
+        const deudores = {};
+
+        snapshot.forEach(doc => {
+            const d = doc.data();
+            const nombre = d.userName;
+            if (!deudores[nombre]) {
+                deudores[nombre] = { 
+                    nombre: nombre.toUpperCase(), 
+                    curso: d.userCourse || "Sin curso", 
+                    saldo: 0 
+                };
+            }
+            if (d.payMethod === "Debe") deudores[nombre].saldo += Number(d.amount);
+            if (d.payMethod === "Abono") deudores[nombre].saldo -= Number(d.amount);
+        });
+
+        const listaFinal = Object.values(deudores).filter(u => u.saldo > 0);
+        const tbody = document.getElementById('cuerpo-cierre');
+        tbody.innerHTML = "";
+
+        if (listaFinal.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="empty-msg">No hay deudores en este período.</td></tr>';
+            return;
+        }
+
+        listaFinal.forEach(u => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td style="font-weight:600;">${u.nombre}</td>
+                <td>${u.curso}</td>
+                <td style="color:var(--red); font-weight:700;">$${u.saldo.toLocaleString('es-AR')}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        alert("✅ Cierre generado con éxito.");
+    } catch (error) {
+        alert("Error al generar cierre: " + error.message);
+    }
+}
 
 
 // ═══════════════════════════════════════════════════════════════
 // 13. UTILIDADES
-// NOTA FUTURA: Si agregás un nuevo método de pago, añadí su caso acá.
 // ═══════════════════════════════════════════════════════════════
 function obtenerCSS(metodo) {
     switch (metodo) {
@@ -765,100 +801,4 @@ function obtenerCSS(metodo) {
         case "Abono":         return "metodo-abono";
         default:              return "";
     }
-}
-let _cierreDeudores = [];
-let _cierreDesdeVal = '';
-let _cierreHastaVal = '';
-
-async function generarCierreMes() {
-    const desdeVal = document.getElementById('cierre-desde').value;
-    const hastaVal = document.getElementById('cierre-hasta').value;
-    if (!desdeVal || !hastaVal) { alert('Seleccioná las dos fechas.'); return; }
-    const desde = new Date(desdeVal);
-    const hasta = new Date(hastaVal);
-    hasta.setDate(hasta.getDate() + 1);
-    if (desde > hasta) { alert('La fecha Desde debe ser anterior a Hasta.'); return; }
-
-    const snapshot = await db.collection('fotocopias')
-        .where('fecha', '>=', desde).where('fecha', '<', hasta).get();
-
-    const saldos  = {};
-    let recaudado = 0;
-    const metodos = { Efectivo: 0, Transferencia: 0, Abono: 0 };
-
-    snapshot.forEach(doc => {
-        const d = doc.data();
-        if (!saldos[d.userName]) saldos[d.userName] = { deuda: 0, curso: d.userCourse || '' };
-        if (d.payMethod === 'Debe')                  saldos[d.userName].deuda += Number(d.amount);
-        if (d.payMethod === 'Abono')                 saldos[d.userName].deuda -= Number(d.amount);
-        if (d.payMethod !== 'Debe')                  recaudado += Number(d.amount);
-        if (metodos[d.payMethod] !== undefined)      metodos[d.payMethod] += Number(d.amount);
-    });
-
-    _cierreDeudores = Object.entries(saldos)
-        .map(([nombre, info]) => ({ nombre, curso: info.curso, deuda: Math.max(0, info.deuda) }))
-        .filter(d => d.deuda > 0)
-        .sort((a, b) => b.deuda - a.deuda);
-    _cierreDesdeVal = desdeVal;
-    _cierreHastaVal = hastaVal;
-
-    const deudaTotal  = _cierreDeudores.reduce((s, d) => s + d.deuda, 0);
-    const ff = v => new Date(v + 'T00:00:00').toLocaleDateString('es-AR');
-
-    document.getElementById('cierre-titulo-periodo').textContent =
-        'Período: ' + ff(desdeVal) + ' → ' + ff(hastaVal);
-    document.getElementById('cierre-recaudado').textContent   = '$' + recaudado.toLocaleString('es-AR');
-    document.getElementById('cierre-deuda-total').textContent = '$' + deudaTotal.toLocaleString('es-AR');
-
-    document.getElementById('cierre-metodos').innerHTML =
-        '<div class="cierre-metodos-grid">'
-        + '<div class="metodo-resumen-item"><span class="metodo-resumen-label">&#128181; Efectivo</span><span class="metodo-resumen-valor">$' + metodos.Efectivo.toLocaleString('es-AR') + '</span></div>'
-        + '<div class="metodo-resumen-item"><span class="metodo-resumen-label">&#128241; Transferencia</span><span class="metodo-resumen-valor">$' + metodos.Transferencia.toLocaleString('es-AR') + '</span></div>'
-        + '<div class="metodo-resumen-item"><span class="metodo-resumen-label">&#9989; Abonos</span><span class="metodo-resumen-valor">$' + metodos.Abono.toLocaleString('es-AR') + '</span></div>'
-        + '</div>';
-
-    document.getElementById('cierre-buscador').value = '';
-    renderizarCierreDeudores(_cierreDeudores);
-    document.getElementById('cierre-resultado').style.display = 'block';
-    document.getElementById('cierre-resultado').scrollIntoView({ behavior: 'smooth' });
-}
-
-function renderizarCierreDeudores(lista) {
-    const el = document.getElementById('cierre-lista-deudores');
-    el.innerHTML = '';
-    if (lista.length === 0) {
-        el.innerHTML = '<p class="empty-msg">Sin deudores en este período. &#127881;</p>';
-        return;
-    }
-    lista.forEach(({ nombre, curso, deuda }) => {
-        const div = document.createElement('div');
-        div.className = 'deudor-item';
-        div.innerHTML =
-            '<div><div class="deudor-nombre">' + nombre.toUpperCase() + '</div>'
-            + '<div class="deudor-info">' + (curso || 'Sin curso') + '</div></div>'
-            + '<div class="deudor-monto">$' + deuda.toLocaleString('es-AR') + '</div>';
-        el.appendChild(div);
-    });
-}
-
-function filtrarCierreDeudores() {
-    const q = document.getElementById('cierre-buscador').value.trim().toLowerCase();
-    renderizarCierreDeudores(q
-        ? _cierreDeudores.filter(d => d.nombre.includes(q) || d.curso.toLowerCase().includes(q))
-        : _cierreDeudores);
-}
-
-function exportarCierreCSV() {
-    if (_cierreDesdeVal === '') { alert('Primero generá el reporte.'); return; }
-    const ff = v => new Date(v + 'T00:00:00').toLocaleDateString('es-AR');
-    let csv = '﻿Nombre,Curso,Saldo deudor\n';
-    _cierreDeudores.forEach(({ nombre, curso, deuda }) => {
-        csv += '"' + nombre + '","' + (curso || '') + '",' + deuda + '\n';
-    });
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'Cierre_ESRN135_' + ff(_cierreDesdeVal).replace(/\//g, '-') + '_al_' + ff(_cierreHastaVal).replace(/\//g, '-') + '.csv';
-    link.click();
-}
 }
