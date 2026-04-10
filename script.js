@@ -296,10 +296,10 @@ function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
             snapshot.forEach(doc => _perfilDocs.push(doc));
             renderizarMovimientos(_perfilTabActual);
         });
-        });
+        };
 
     document.getElementById('user-profile').scrollIntoView({ behavior: 'smooth' });
-}
+
 
 // Variables de tab de perfil
 let _perfilDocs      = [];
@@ -765,6 +765,7 @@ function obtenerCSS(metodo) {
         case "Abono":         return "metodo-abono";
         default:              return "";
     }
+}
 let _cierreDeudores = [];
 let _cierreDesdeVal = '';
 let _cierreHastaVal = '';
