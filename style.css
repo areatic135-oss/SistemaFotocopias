@@ -253,6 +253,7 @@ input[type="email"],
 input[type="password"],
 input[type="number"],
 input[type="date"],
+input[type="tel"],
 select {
     width: 100%;
     padding: 11px 14px;
@@ -578,7 +579,6 @@ select {
 .mov-monto  { font-family: var(--font-mono); font-weight: 700; white-space: nowrap; }
 .mov-metodo { font-size: 0.72rem; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
 
-/* Botones de acción en el perfil del usuario */
 .mov-acciones { display: flex; gap: 4px; margin-left: 4px; }
 
 .metodo-debe     { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red);    }
@@ -690,7 +690,7 @@ tbody tr:last-child td { border-bottom: none; }
 .btn-editar:hover   { background: var(--accent); color: #fff; }
 .btn-eliminar:hover { background: var(--red);    color: #fff; }
 
-.historial-footer { margin-top: 16px; display: flex; justify-content: flex-end; }
+.historial-footer { margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .btn-export {
     padding: 9px 18px;
@@ -786,6 +786,8 @@ tbody tr:last-child td { border-bottom: none; }
     max-width: 460px;
     box-shadow: var(--shadow-lg);
     animation: fadeIn 0.2s ease;
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 .modal-header {
@@ -886,23 +888,8 @@ h5 {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   RESPONSIVE
+   TANDA 2 — WhatsApp + Tabs movimientos + Cierre
    ═══════════════════════════════════════════════════════════════ */
-@media (max-width: 480px) {
-    .form-row      { grid-template-columns: 1fr; }
-    .price-grid    { grid-template-columns: repeat(2, 1fr); }
-    .stats-grid    { grid-template-columns: 1fr 1fr; }
-    .filtros-bar   { grid-template-columns: 1fr; }
-    .btn-filtrar   { grid-column: span 1; }
-    .profile-header{ flex-direction: column; gap: 12px; }
-    .profile-saldo-box { text-align: left; }
-    .acciones-cell { flex-direction: column; }
-    .mov-item      { flex-wrap: wrap; }
-}
-/* ═══════════════════════════════════════════════════════════════
-   TANDA 2 — WhatsApp + Tabs movimientos + Cierre metodos
-   ═══════════════════════════════════════════════════════════════ */
-
 .profile-acciones-bar {
     display: flex;
     gap: 8px;
@@ -1043,10 +1030,127 @@ h5 {
 }
 .cierre-resumen-header h5 { margin-bottom: 0; }
 
-.historial-footer { margin-top: 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* ═══════════════════════════════════════════════════════════════
+   TANDA 3 — Aviso de Cierre por WhatsApp
+   ═══════════════════════════════════════════════════════════════ */
+.cierre-wa-box {
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin: 16px 0;
+}
+.cierre-wa-box h5 { color: #16a34a; margin-bottom: 6px; }
+.cierre-wa-hint {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 8px;
+    line-height: 1.5;
+}
+.cierre-wa-hint strong { color: var(--text); }
 
+.deudor-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--red);
+    border-radius: var(--radius);
+    padding: 13px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--shadow);
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.deudor-acciones { display: flex; gap: 6px; flex-shrink: 0; }
+
+.btn-wa-deudor {
+    padding: 6px 12px;
+    background: #25d366;
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+    white-space: nowrap;
+}
+.btn-wa-deudor:hover { background: #1ebe5d; }
+
+/* ═══════════════════════════════════════════════════════════════
+   EQUIPOS
+   ═══════════════════════════════════════════════════════════════ */
+.equipo-form-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+}
+.equipo-form-box h5 { margin-bottom: 16px; }
+
+.equipo-filtros {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.eq-filtro-btn {
+    padding: 6px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: 20px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+    white-space: nowrap;
+}
+.eq-filtro-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+.eq-filtro-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.badge-en-uso    { background: var(--orange-bg); color: var(--orange); border: 1px solid var(--orange); }
+.badge-devuelto  { background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green);  }
+
+.btn-devolver {
+    padding: 4px 9px;
+    border-radius: 5px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: 0.2s;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    border: 1px solid var(--green);
+    color: var(--green);
+    background: transparent;
+}
+.btn-devolver:hover { background: var(--green); color: #fff; }
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════ */
 @media (max-width: 480px) {
+    .form-row            { grid-template-columns: 1fr; }
+    .price-grid          { grid-template-columns: repeat(2, 1fr); }
+    .stats-grid          { grid-template-columns: 1fr 1fr; }
+    .filtros-bar         { grid-template-columns: 1fr; }
+    .btn-filtrar         { grid-column: span 1; }
+    .profile-header      { flex-direction: column; gap: 12px; }
+    .profile-saldo-box   { text-align: left; }
+    .acciones-cell       { flex-direction: column; }
+    .mov-item            { flex-wrap: wrap; }
     .cierre-metodos-grid { grid-template-columns: 1fr; }
     .movimientos-tabs    { flex-wrap: wrap; }
     .profile-acciones-bar { flex-direction: column; }
+    .deudor-item         { flex-direction: column; align-items: flex-start; }
+    .deudor-acciones     { width: 100%; }
+    .btn-wa-deudor       { flex: 1; text-align: center; }
 }
