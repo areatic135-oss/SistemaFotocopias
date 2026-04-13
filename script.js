@@ -345,7 +345,7 @@ function renderizarMovimientos(tab) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// WHATSAPP - Aviso de deuda individual
+// WHATSAPP — Aviso individual (panel del perfil de usuario)
 // ═══════════════════════════════════════════════════════════════
 function abrirWhatsApp() {
     if (!usuarioSeleccionado) { alert('Seleccioná un usuario primero.'); return; }
@@ -387,6 +387,42 @@ function enviarWhatsApp() {
     if (!msg)                   { alert('El mensaje no puede estar vacío.'); return; }
     window.open('https://wa.me/549' + tel + '?text=' + encodeURIComponent(msg), '_blank');
     cerrarWhatsApp();
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// WHATSAPP — avisarDeudor(nombre, saldo)
+// Abre el chat de la ESCUELA con el mensaje del deudor cargado.
+// El receptor es siempre el número de la escuela (no el del padre).
+// ──────────────────────────────────────────────────────────────
+// NOTA FUTURA: Si cambia el número de la escuela, modificá solo
+// la variable 'numeroBase' en la primera línea de la función.
+// ═══════════════════════════════════════════════════════════════
+function avisarDeudor(nombre, saldo) {
+    // 1. Limpiar y normalizar el número de la escuela
+    let numeroBase = "2920298994";
+    numeroBase = numeroBase.replace(/[\s\-]/g, "");               // quitar espacios y guiones
+    if (numeroBase.startsWith("0")) numeroBase = numeroBase.slice(1); // quitar 0 inicial si existe
+    if (!numeroBase.startsWith("549")) numeroBase = "549" + numeroBase; // agregar prefijo Argentina
+    // Resultado esperado: "5492920298994"
+
+    // 2. Formatear el saldo como moneda local argentina
+    const saldoFormateado = "$" + Number(saldo).toLocaleString("es-AR");
+
+    // 3. Obtener template del textarea; si no existe, usar mensaje por defecto
+    const templateEl = document.getElementById("whatsapp-template");
+    const template = (templateEl && templateEl.value.trim())
+        ? templateEl.value.trim()
+        : "Hola! Te avisamos que *{nombre}* tiene un saldo pendiente de *{saldo}* en concepto de fotocopias.\n\nPodés regularizarlo por transferencia al alias *esrn135* o acercarte personalmente.\n\n¡Gracias! 👋";
+
+    // 4. Reemplazar variables en el template
+    const mensaje = template
+        .replace(/{nombre}/g, nombre)
+        .replace(/{saldo}/g, saldoFormateado);
+
+    // 5. Construir URL y abrir WhatsApp con el chat de la escuela
+    const url = "https://wa.me/" + numeroBase + "?text=" + encodeURIComponent(mensaje);
+    window.open(url, "_blank");
 }
 
 
@@ -782,16 +818,13 @@ async function generarCierreMes() {
 
         const deudaTotal = Object.values(mapa).reduce((acc, u) => acc + Math.max(0, u.saldo), 0);
 
-        // Título período
         const fD = desde.toLocaleDateString('es-AR');
         const fH = hasta.toLocaleDateString('es-AR');
         document.getElementById('cierre-titulo-periodo').textContent = `Período: ${fD} → ${fH}`;
 
-        // Totales
         document.getElementById('cierre-recaudado').textContent   = '$' + recaudado.toLocaleString('es-AR');
         document.getElementById('cierre-deuda-total').textContent = '$' + deudaTotal.toLocaleString('es-AR');
 
-        // Métodos
         document.getElementById('cierre-metodos').innerHTML = `
             <div class="cierre-metodos-grid">
                 <div class="metodo-resumen-item">
@@ -809,10 +842,8 @@ async function generarCierreMes() {
             </div>
         `;
 
-        // Template WA
         document.getElementById('cierre-wa-template').value = TEMPLATE_CIERRE_DEFAULT;
 
-        // Lista deudores
         _cierreDeudoresData = Object.values(mapa).filter(u => u.saldo > 0).sort((a, b) => b.saldo - a.saldo);
         renderizarCierreDeudores(_cierreDeudoresData);
 
@@ -862,7 +893,7 @@ function filtrarCierreDeudores() {
     renderizarCierreDeudores(filtrados);
 }
 
-// ── TANDA 3: Enviar aviso WA desde el cierre ──
+// ── Enviar aviso WA desde el cierre (número del padre/docente) ──
 function enviarAvisoWACierre(nombre, curso, saldo) {
     const template = document.getElementById('cierre-wa-template').value.trim();
     const saldoStr = '$' + saldo.toLocaleString('es-AR');
@@ -898,8 +929,8 @@ function exportarCierreCSV() {
 function imprimirCierre() {
     if (_cierreDeudoresData.length === 0) { alert('Generá el cierre primero.'); return; }
 
-    const periodo = document.getElementById('cierre-titulo-periodo').textContent;
-    const recaudado = document.getElementById('cierre-recaudado').textContent;
+    const periodo    = document.getElementById('cierre-titulo-periodo').textContent;
+    const recaudado  = document.getElementById('cierre-recaudado').textContent;
     const deudaTotal = document.getElementById('cierre-deuda-total').textContent;
 
     let filas = _cierreDeudoresData.map(u =>
@@ -927,26 +958,26 @@ function imprimirCierre() {
 let _equiposFiltroActual = 'todos';
 
 async function registrarEquipo() {
-    const tipo     = document.getElementById('eq-tipo').value;
-    const numero   = document.getElementById('eq-numero').value.trim();
-    const docente  = document.getElementById('eq-docente').value.trim();
-    const curso    = document.getElementById('eq-curso').value.trim();
-    const retiro   = document.getElementById('eq-fecha-retiro').value;
-    const devol    = document.getElementById('eq-fecha-devolucion').value;
-    const nota     = document.getElementById('eq-nota').value.trim();
+    const tipo    = document.getElementById('eq-tipo').value;
+    const numero  = document.getElementById('eq-numero').value.trim();
+    const docente = document.getElementById('eq-docente').value.trim();
+    const curso   = document.getElementById('eq-curso').value.trim();
+    const retiro  = document.getElementById('eq-fecha-retiro').value;
+    const devol   = document.getElementById('eq-fecha-devolucion').value;
+    const nota    = document.getElementById('eq-nota').value.trim();
 
     if (!docente) { alert('Ingresá el nombre del docente.'); return; }
 
     const datos = {
         tipo,
-        numero:         numero || '—',
-        docente:        docente.toLowerCase(),
-        curso:          curso || '—',
-        fechaRetiro:    retiro ? firebase.firestore.Timestamp.fromDate(new Date(retiro + 'T12:00:00')) : firebase.firestore.FieldValue.serverTimestamp(),
-        fechaDevolucion: devol  ? firebase.firestore.Timestamp.fromDate(new Date(devol + 'T12:00:00'))  : null,
-        estado:         'En uso',
-        nota:           nota || '',
-        registrado:     firebase.firestore.FieldValue.serverTimestamp()
+        numero:          numero || '—',
+        docente:         docente.toLowerCase(),
+        curso:           curso || '—',
+        fechaRetiro:     retiro ? firebase.firestore.Timestamp.fromDate(new Date(retiro + 'T12:00:00')) : firebase.firestore.FieldValue.serverTimestamp(),
+        fechaDevolucion: devol  ? firebase.firestore.Timestamp.fromDate(new Date(devol  + 'T12:00:00')) : null,
+        estado:          'En uso',
+        nota:            nota || '',
+        registrado:      firebase.firestore.FieldValue.serverTimestamp()
     };
 
     try {
@@ -974,9 +1005,8 @@ function cargarEquipos() {
             const d  = doc.data();
             const id = doc.id;
 
-            // Aplicar filtro
             if (_equiposFiltroActual !== 'todos') {
-                if (_equiposFiltroActual === 'En uso' && d.estado !== 'En uso') return;
+                if (_equiposFiltroActual === 'En uso'   && d.estado !== 'En uso')   return;
                 if (_equiposFiltroActual === 'Devuelto' && d.estado !== 'Devuelto') return;
                 if (['Netbook','Smart TV','Proyector','Parlante'].includes(_equiposFiltroActual) && d.tipo !== _equiposFiltroActual) return;
             }
@@ -1060,8 +1090,8 @@ async function guardarEdicionEquipo() {
         estado:  document.getElementById('eq-edit-estado').value,
         nota:    document.getElementById('eq-edit-nota').value.trim()
     };
-    if (retiroVal) cambios.fechaRetiro = firebase.firestore.Timestamp.fromDate(new Date(retiroVal + 'T12:00:00'));
-    if (devolVal)  cambios.fechaDevolucion = firebase.firestore.Timestamp.fromDate(new Date(devolVal + 'T12:00:00'));
+    if (retiroVal) cambios.fechaRetiro     = firebase.firestore.Timestamp.fromDate(new Date(retiroVal + 'T12:00:00'));
+    if (devolVal)  cambios.fechaDevolucion = firebase.firestore.Timestamp.fromDate(new Date(devolVal  + 'T12:00:00'));
 
     try {
         await db.collection("equipos").doc(equipoEditandoId).update(cambios);
@@ -1087,7 +1117,7 @@ async function exportarEquiposCSV() {
         let csv = "\ufeffTipo,Número,Docente,Curso,Fecha Retiro,Fecha Devolución,Estado,Nota\n";
         snapshot.forEach(doc => {
             const d  = doc.data();
-            const fR = d.fechaRetiro    ? new Date(d.fechaRetiro.seconds * 1000).toLocaleDateString('es-AR')    : '—';
+            const fR = d.fechaRetiro     ? new Date(d.fechaRetiro.seconds * 1000).toLocaleDateString('es-AR')     : '—';
             const fD = d.fechaDevolucion ? new Date(d.fechaDevolucion.seconds * 1000).toLocaleDateString('es-AR') : '—';
             csv += `"${d.tipo}","${d.numero}","${d.docente}","${d.curso}","${fR}","${fD}","${d.estado}","${d.nota || ''}"\n`;
         });
