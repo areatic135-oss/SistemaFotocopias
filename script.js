@@ -128,6 +128,26 @@ document.getElementById('user-name').addEventListener('input', async (e) => {
             lista.appendChild(li);
         }
     });
+
+    // Auto-fill saldo a favor if user has credit
+    const nombreActual = document.getElementById('user-name').value.trim().toLowerCase();
+    if (nombreActual.length >= 2) {
+        const snapSaldo = await db.collection("fotocopias")
+            .where("userName", "==", nombreActual).get();
+        let balance = 0;
+        snapSaldo.forEach(d => {
+            const data = d.data();
+            if (data.payMethod === "Debe")    balance += Number(data.amount);
+            if (data.payMethod === "Abono")   balance -= Number(data.amount);
+            if (data.payMethod === "A Favor") balance -= Number(data.amount);
+        });
+        const saldoFavor = Math.max(0, -balance);
+        const badge = document.getElementById('badge-saldo-favor-registro');
+        if (badge) {
+            badge.style.display = saldoFavor > 0 ? 'inline-block' : 'none';
+            badge.textContent   = `💚 Tiene $${saldoFavor.toLocaleString('es-AR')} a favor`;
+        }
+    }
 });
 
 document.addEventListener('click', (e) => {
@@ -223,43 +243,65 @@ document.getElementById('search-input').addEventListener('input', async (e) => {
     snapshot.forEach(doc => {
         const d = doc.data();
         if (!usuarios[d.userName]) {
-            usuarios[d.userName] = { curso: d.userCourse || "", deuda: 0 };
+            usuarios[d.userName] = { curso: d.userCourse || "", balance: 0 };
         }
-        if (d.payMethod === "Debe")  usuarios[d.userName].deuda += Number(d.amount);
-        if (d.payMethod === "Abono") usuarios[d.userName].deuda -= Number(d.amount);
+        if (d.payMethod === "Debe")    usuarios[d.userName].balance += Number(d.amount);
+        if (d.payMethod === "Abono")   usuarios[d.userName].balance -= Number(d.amount);
+        if (d.payMethod === "A Favor") usuarios[d.userName].balance -= Number(d.amount);
     });
 
     Object.entries(usuarios).forEach(([nombre, info]) => {
-        const deuda = Math.max(0, info.deuda);
-        const div   = document.createElement('div');
+        const balance = info.balance;
+        const deuda   = Math.max(0, balance);
+        const favor   = Math.max(0, -balance);
+        const div     = document.createElement('div');
         div.className = 'search-result-item';
         div.innerHTML = `
             <div>
                 <div class="search-result-name">${nombre.toUpperCase()}</div>
                 <div class="search-result-info">${info.curso || "Sin curso"}</div>
             </div>
-            <div class="search-result-deuda ${deuda > 0 ? 'deuda-roja' : 'deuda-verde'}">
-                $${deuda.toLocaleString('es-AR')}
+            <div class="search-result-deuda ${favor > 0 ? 'deuda-favor' : (deuda > 0 ? 'deuda-roja' : 'deuda-verde')}">
+                ${favor > 0 ? '💚 +$' + favor.toLocaleString('es-AR') + ' a favor' : '$' + deuda.toLocaleString('es-AR')}
             </div>
         `;
-        div.addEventListener('click', () => cargarPerfilUsuario(nombre, info.curso, deuda));
+        div.addEventListener('click', () => cargarPerfilUsuario(nombre, info.curso, balance));
         resultados.appendChild(div);
     });
 });
 
-function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
+function cargarPerfilUsuario(nombre, curso, balanceInicial) {
     usuarioSeleccionado = { nombre, curso };
 
     document.getElementById('user-profile').style.display = 'block';
     document.getElementById('profile-name').textContent   = nombre.toUpperCase();
     document.getElementById('profile-curso').textContent  = curso || "Sin curso";
 
-    const saldoEl  = document.getElementById('profile-saldo');
-    const alertaEl = document.getElementById('alerta-deudor');
+    const saldoEl     = document.getElementById('profile-saldo');
+    const saldoLabel  = document.getElementById('profile-saldo-label');
+    const alertaEl    = document.getElementById('alerta-deudor');
+    const alertaFavor = document.getElementById('alerta-favor');
 
-    saldoEl.textContent    = `$${saldoDeuda.toLocaleString('es-AR')}`;
-    saldoEl.className      = 'profile-saldo ' + (saldoDeuda > 0 ? '' : 'verde');
-    alertaEl.style.display = saldoDeuda >= UMBRAL_DEUDOR_CRONICO ? 'block' : 'none';
+    function actualizarSaldoUI(balance) {
+        const deuda = Math.max(0, balance);
+        const favor = Math.max(0, -balance);
+        if (favor > 0) {
+            saldoEl.textContent    = `+$${favor.toLocaleString('es-AR')}`;
+            saldoEl.className      = 'profile-saldo verde';
+            saldoLabel.textContent = 'Saldo a favor';
+            alertaEl.style.display    = 'none';
+            alertaFavor.style.display = 'block';
+            alertaFavor.textContent   = `💚 Este usuario tiene $${favor.toLocaleString('es-AR')} a favor. Se descontará de la próxima deuda.`;
+        } else {
+            saldoEl.textContent    = `$${deuda.toLocaleString('es-AR')}`;
+            saldoEl.className      = 'profile-saldo ' + (deuda > 0 ? '' : 'verde');
+            saldoLabel.textContent = 'Saldo deudor';
+            alertaEl.style.display    = deuda >= UMBRAL_DEUDOR_CRONICO ? 'block' : 'none';
+            alertaFavor.style.display = 'none';
+        }
+    }
+
+    actualizarSaldoUI(balanceInicial);
 
     db.collection("fotocopias")
         .where("userName", "==", nombre)
@@ -273,17 +315,15 @@ function cargarPerfilUsuario(nombre, curso, saldoDeuda) {
                 return;
             }
 
-            let deudaActual = 0;
+            let balanceActual = 0;
             snapshot.forEach(doc => {
                 const d = doc.data();
-                if (d.payMethod === "Debe")  deudaActual += Number(d.amount);
-                if (d.payMethod === "Abono") deudaActual -= Number(d.amount);
+                if (d.payMethod === "Debe")    balanceActual += Number(d.amount);
+                if (d.payMethod === "Abono")   balanceActual -= Number(d.amount);
+                if (d.payMethod === "A Favor") balanceActual -= Number(d.amount);
             });
-            deudaActual = Math.max(0, deudaActual);
 
-            saldoEl.textContent    = `$${deudaActual.toLocaleString('es-AR')}`;
-            saldoEl.className      = 'profile-saldo ' + (deudaActual > 0 ? '' : 'verde');
-            alertaEl.style.display = deudaActual >= UMBRAL_DEUDOR_CRONICO ? 'block' : 'none';
+            actualizarSaldoUI(balanceActual);
 
             _perfilDocs = [];
             snapshot.forEach(doc => _perfilDocs.push(doc));
@@ -310,6 +350,7 @@ function renderizarMovimientos(tab) {
         const m = doc.data().payMethod;
         if (tab === 'deudas') return m === 'Debe';
         if (tab === 'abonos') return m === 'Abono';
+        if (tab === 'favor')  return m === 'A Favor';
         return true;
     });
     if (filtrados.length === 0) {
@@ -322,7 +363,7 @@ function renderizarMovimientos(tab) {
         const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
         const css   = obtenerCSS(d.payMethod);
         const color = d.payMethod === 'Debe' ? 'var(--red)' : 'var(--green)';
-        const signo = d.payMethod === 'Abono' ? '-' : '';
+        const signo = (d.payMethod === 'Abono' || d.payMethod === 'A Favor') ? '+' : '';
         const div   = document.createElement('div');
         div.className = 'mov-item';
         div.innerHTML =
@@ -450,6 +491,36 @@ async function registrarAbono() {
         await db.collection("fotocopias").add(datos);
         document.getElementById('abono-monto').value = "";
         alert(`✅ Abono de $${monto} registrado.`);
+    } catch (error) {
+        alert("Error: " + error.message);
+    }
+}
+
+
+async function registrarSaldoFavor() {
+    if (!usuarioSeleccionado) { alert("Seleccioná un usuario primero."); return; }
+
+    const monto  = parseFloat(document.getElementById('favor-monto').value);
+    const nota   = document.getElementById('favor-nota').value.trim();
+
+    if (isNaN(monto) || monto <= 0) { alert("Ingresá un monto válido."); return; }
+    if (!confirm(`¿Confirmás $${monto} a favor para ${usuarioSeleccionado.nombre.toUpperCase()}?\n\nEste saldo se descontará automáticamente de sus próximas deudas.`)) return;
+
+    const datos = {
+        userName:   usuarioSeleccionado.nombre,
+        userCourse: usuarioSeleccionado.curso || "",
+        userRole:   "Alumno",
+        amount:     monto,
+        payMethod:  "A Favor",
+        nota:       nota || `Saldo a favor`,
+        fecha:      firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    try {
+        await db.collection("fotocopias").add(datos);
+        document.getElementById('favor-monto').value = "";
+        document.getElementById('favor-nota').value  = "";
+        alert(`✅ $${monto} cargados como saldo a favor para ${usuarioSeleccionado.nombre.toUpperCase()}.`);
     } catch (error) {
         alert("Error: " + error.message);
     }
@@ -667,8 +738,9 @@ async function imprimirResumen() {
     snapshot.forEach(doc => {
         const d     = doc.data();
         const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
-        if (d.payMethod === "Debe")  deuda += Number(d.amount);
-        if (d.payMethod === "Abono") deuda -= Number(d.amount);
+        if (d.payMethod === "Debe")    deuda += Number(d.amount);
+        if (d.payMethod === "Abono")   deuda -= Number(d.amount);
+        if (d.payMethod === "A Favor") deuda -= Number(d.amount);
 
         filas += `
             <tr>
@@ -809,8 +881,9 @@ async function generarCierreMes() {
                     saldo:  0
                 };
             }
-            if (d.payMethod === "Debe")  mapa[nombre].saldo += Number(d.amount);
-            if (d.payMethod === "Abono") mapa[nombre].saldo -= Number(d.amount);
+            if (d.payMethod === "Debe")    mapa[nombre].saldo += Number(d.amount);
+            if (d.payMethod === "Abono")   mapa[nombre].saldo -= Number(d.amount);
+            if (d.payMethod === "A Favor") mapa[nombre].saldo -= Number(d.amount);
 
             if (d.payMethod !== "Debe") recaudado += Number(d.amount);
             if (metodos[d.payMethod] !== undefined) metodos[d.payMethod] += Number(d.amount);
@@ -1141,6 +1214,7 @@ function obtenerCSS(metodo) {
         case "Efectivo":      return "metodo-efectivo";
         case "Transferencia": return "metodo-transfer";
         case "Abono":         return "metodo-abono";
+        case "A Favor":       return "metodo-favor";
         default:              return "";
     }
 }

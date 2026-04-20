@@ -41,6 +41,7 @@
                     <option value="Efectivo">💵 Efectivo</option>
                     <option value="Transferencia">📱 Transferencia</option>
                     <option value="Abono">✅ Abono</option>
+                    <option value="A Favor">💚 A Favor</option>
                 </select>
             </div>
             <div class="field-group">
@@ -173,6 +174,7 @@
                         <label>Nombre y Apellido *</label>
                         <input type="text" id="user-name" placeholder="Ej: Juan Pérez" autocomplete="off" required>
                         <ul id="autocomplete-list" class="autocomplete-list"></ul>
+                        <span id="badge-saldo-favor-registro" class="badge-favor-registro" style="display:none;"></span>
                     </div>
                     <div class="form-row">
                         <div class="field-group">
@@ -237,7 +239,7 @@
                             <span id="profile-curso" class="profile-badge"></span>
                         </div>
                         <div class="profile-saldo-box">
-                            <span class="profile-saldo-label">Saldo deudor</span>
+                            <span class="profile-saldo-label" id="profile-saldo-label">Saldo deudor</span>
                             <span id="profile-saldo" class="profile-saldo">$0</span>
                         </div>
                     </div>
@@ -266,6 +268,8 @@
                         ⚠️ DEUDOR CRÓNICO — Supera el umbral de deuda permitido.
                     </div>
 
+                    <div id="alerta-favor" class="alerta-favor" style="display:none;"></div>
+
                     <div class="pago-parcial-box">
                         <h5>Registrar Abono</h5>
                         <div class="form-row">
@@ -278,10 +282,21 @@
                         <button onclick="registrarAbono()" class="btn-abono">✅ Registrar Abono</button>
                     </div>
 
+                    <div class="pago-parcial-box favor-box">
+                        <h5>💚 Cargar Saldo a Favor</h5>
+                        <p class="favor-desc">El saldo a favor se descontará automáticamente de las próximas deudas.</p>
+                        <div class="form-row">
+                            <input type="number" id="favor-monto" placeholder="Monto a cargar $" min="1">
+                            <input type="text" id="favor-nota" placeholder="Nota (opcional)">
+                        </div>
+                        <button onclick="registrarSaldoFavor()" class="btn-favor">💚 Cargar Saldo a Favor</button>
+                    </div>
+
                     <div class="movimientos-tabs">
                         <button class="mov-tab-btn active" onclick="mostrarMovTab('todos', this)">📁 Todos</button>
                         <button class="mov-tab-btn" onclick="mostrarMovTab('deudas', this)">📌 Deudas</button>
                         <button class="mov-tab-btn" onclick="mostrarMovTab('abonos', this)">✅ Abonos</button>
+                        <button class="mov-tab-btn" onclick="mostrarMovTab('favor', this)">💚 A Favor</button>
                     </div>
                     <div id="profile-historial" class="profile-historial-container"></div>
                 </div>

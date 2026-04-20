@@ -1154,3 +1154,64 @@ h5 {
     .deudor-acciones     { width: 100%; }
     .btn-wa-deudor       { flex: 1; text-align: center; }
 }
+/* ── Saldo a Favor ────────────────────────────────────── */
+.alerta-favor {
+    background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+    border: 1.5px solid #34d399;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #065f46;
+    margin-bottom: 14px;
+}
+
+.favor-box {
+    border-color: #34d399 !important;
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7) !important;
+}
+
+.favor-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: -4px 0 10px;
+}
+
+.btn-favor {
+    width: 100%;
+    padding: 11px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: opacity 0.2s;
+}
+.btn-favor:hover { opacity: 0.88; }
+
+.deuda-favor {
+    color: #059669 !important;
+    font-weight: 700;
+    font-size: 0.82rem;
+}
+
+.metodo-favor {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #34d399;
+}
+
+.badge-favor-registro {
+    display: inline-block;
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #34d399;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin-top: 6px;
+}
