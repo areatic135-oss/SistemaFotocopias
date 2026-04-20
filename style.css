@@ -1215,3 +1215,27 @@ h5 {
     font-weight: 700;
     margin-top: 6px;
 }
+/*cambio */
+.deudores-group-header {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 10px 4px 4px;
+    margin-top: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.btn-wa {
+    background: #25d366;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 13px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.btn-wa:hover { background: #1ebe5a; }

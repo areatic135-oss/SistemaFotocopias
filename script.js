@@ -842,8 +842,10 @@ function calcularEstadisticas() {
 }
 
 
-// ═══════════════════════════════════════════════════════════════
+//cambio desde aca ═══════════════════════════════════════════════════════════════
 // 12. CIERRE DE MES + TANDA 3: AVISO WHATSAPP MASIVO
+// ═══════════════════════════════════════════════════════════════
+// 12. CIERRE DE MES + AVISO WHATSAPP
 // ═══════════════════════════════════════════════════════════════
 
 const TEMPLATE_CIERRE_DEFAULT =
@@ -852,6 +854,13 @@ const TEMPLATE_CIERRE_DEFAULT =
   + 'en concepto de fotocopias correspondiente al cierre del período.\n\n'
   + 'Pueden acercarse a regularizarlo o transferir al alias *esrn135* '
   + 'y enviarnos el comprobante.\n\n¡Muchas gracias! 😊';
+
+const TEMPLATE_CIERRE_PROFESOR =
+    'Hola! Le escribimos desde el Área TIC de la ESRN 135.\n\n'
+  + 'Le informamos que registra un saldo pendiente de *{saldo}* '
+  + 'en concepto de fotocopias correspondiente al cierre del período.\n\n'
+  + 'Puede regularizarlo acercándose personalmente o transfiriendo al alias *esrn135*.\n\n'
+  + '¡Muchas gracias! 😊';
 
 let _cierreDeudoresData = [];
 
@@ -879,16 +888,17 @@ async function generarCierreMes() {
             const nombre = d.userName || 'sin nombre';
             if (!mapa[nombre]) {
                 mapa[nombre] = {
-                    nombre: nombre.toUpperCase(),
-                    curso:  d.userCourse || 'Sin curso',
-                    role:   d.userRole   || 'Alumno',
-                    phone:  d.userPhone  || '',
-                    saldo:  0
+                    nombre:  nombre.toUpperCase(),
+                    curso:   d.userCourse || 'Sin curso',
+                    role:    d.userRole   || 'Alumno',
+                    phone:   d.userPhone  || '',
+                    saldo:   0
                 };
             }
-            // Actualizar rol y teléfono si vienen en este registro
+            // El rol y teléfono más reciente gana
             if (d.userRole)  mapa[nombre].role  = d.userRole;
             if (d.userPhone) mapa[nombre].phone = d.userPhone;
+
             if (d.payMethod === "Debe")    mapa[nombre].saldo += Number(d.amount);
             if (d.payMethod === "Abono")   mapa[nombre].saldo -= Number(d.amount);
             if (d.payMethod === "A Favor") mapa[nombre].saldo -= Number(d.amount);
@@ -925,7 +935,12 @@ async function generarCierreMes() {
 
         document.getElementById('cierre-wa-template').value = TEMPLATE_CIERRE_DEFAULT;
 
-        _cierreDeudoresData = Object.values(mapa).filter(u => u.saldo > 0).sort((a, b) => b.saldo - a.saldo);
+        // Solo deudores, separados por rol, ordenados de mayor a menor deuda
+        const soloDeudores = Object.values(mapa).filter(u => u.saldo > 0);
+        _cierreDeudoresData = [
+            ...soloDeudores.filter(u => u.role.toLowerCase() === 'profesor').sort((a, b) => b.saldo - a.saldo),
+            ...soloDeudores.filter(u => u.role.toLowerCase() !== 'profesor').sort((a, b) => b.saldo - a.saldo)
+        ];
         renderizarCierreDeudores(_cierreDeudoresData);
 
         document.getElementById('cierre-resultado').style.display = 'block';
@@ -945,45 +960,76 @@ function renderizarCierreDeudores(lista) {
         return;
     }
 
-    lista.forEach(u => {
+    const profesores = lista.filter(u => (u.role || '').toLowerCase() === 'profesor');
+    const alumnos    = lista.filter(u => (u.role || '').toLowerCase() !== 'profesor');
+
+    function crearItem(u) {
         const esProfesor = (u.role || '').toLowerCase() === 'profesor';
-        const roleBadge  = esProfesor
-            ? '<span style="font-size:0.7rem; background:#e8f0fe; color:#1a56db; border-radius:4px; padding:1px 6px; margin-left:6px;">👨‍🏫 Docente</span>'
-            : '<span style="font-size:0.7rem; background:#f0fdf4; color:#166534; border-radius:4px; padding:1px 6px; margin-left:6px;">🎒 Alumno</span>';
-        const tienePhone = u.phone && u.phone.length >= 8;
-        const btnLabel   = tienePhone
-            ? (esProfesor ? '📲 Avisar docente' : '📲 Avisar')
-            : (esProfesor ? '📲 Avisar docente ⚠️' : '📲 Avisar ⚠️');
-        const btnTitle   = tienePhone ? '' : 'title="Sin teléfono guardado — se pedirá una vez"';
         const div = document.createElement('div');
         div.className = 'deudor-item';
         div.innerHTML = `
             <div>
-                <div class="deudor-nombre">${u.nombre}${roleBadge}</div>
+                <div class="deudor-nombre">${u.nombre}</div>
                 <div class="deudor-info">${u.curso}</div>
             </div>
             <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                 <span class="deudor-monto">$${u.saldo.toLocaleString('es-AR')}</span>
-                <div class="deudor-acciones">
-                    <button class="btn-wa-deudor" ${btnTitle}
-                        onclick="enviarAvisoWACierre('${u.nombre}', '${u.curso}', ${u.saldo}, '${u.role || 'Alumno'}', '${u.phone || ''}')">
-                        ${btnLabel}
-                    </button>
-                </div>
+                <button class="btn-wa" onclick="enviarAviso('${u.nombre}', ${u.saldo}, '${u.role || 'Alumno'}')">
+                    📲 Avisar
+                </button>
             </div>
         `;
-        contenedor.appendChild(div);
-    });
+        return div;
+    }
+
+    if (profesores.length > 0) {
+        const header = document.createElement('div');
+        header.className = 'deudores-group-header';
+        header.innerHTML = '👨‍🏫 Profesores';
+        contenedor.appendChild(header);
+        profesores.forEach(u => contenedor.appendChild(crearItem(u)));
+    }
+
+    if (alumnos.length > 0) {
+        const header = document.createElement('div');
+        header.className = 'deudores-group-header';
+        header.innerHTML = '🎒 Alumnos';
+        contenedor.appendChild(header);
+        alumnos.forEach(u => contenedor.appendChild(crearItem(u)));
+    }
 }
 
 function filtrarCierreDeudores() {
     const query = document.getElementById('cierre-buscador').value.trim().toLowerCase();
     const filtrados = query
-        ? _cierreDeudoresData.filter(u => u.nombre.toLowerCase().includes(query) || u.curso.toLowerCase().includes(query))
+        ? _cierreDeudoresData.filter(u =>
+            u.nombre.toLowerCase().includes(query) ||
+            u.curso.toLowerCase().includes(query))
         : _cierreDeudoresData;
     renderizarCierreDeudores(filtrados);
 }
 
+// ── enviarAviso: abre WhatsApp directo sin número fijo ──
+// Usa wa.me/?text= (el usuario elige con qué contacto compartirlo).
+// Diferencia el mensaje según si es Alumno o Profesor.
+function enviarAviso(nombre, saldo, role) {
+    const esProfesor = (role || '').toLowerCase() === 'profesor';
+
+    const templateEl  = document.getElementById('cierre-wa-template');
+    const templateBase = esProfesor ? TEMPLATE_CIERRE_PROFESOR : TEMPLATE_CIERRE_DEFAULT;
+    const template = (templateEl && templateEl.value.trim())
+        ? templateEl.value.trim()
+        : templateBase;
+
+    const saldoStr = '$' + Number(saldo).toLocaleString('es-AR');
+    const msg = template
+        .replace(/{nombre}/g, nombre)
+        .replace(/{saldo}/g,  saldoStr);
+
+    // wa.me/?text= abre el selector de chat de WhatsApp (sin número hardcodeado)
+    window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+}
+//aca cierra cambio
 // ── Enviar aviso WA desde el cierre ──
 // Si el número está guardado en Firebase → abre WhatsApp directo.
 // Si no está → lo pide UNA sola vez y lo recuerda para la sesión.
