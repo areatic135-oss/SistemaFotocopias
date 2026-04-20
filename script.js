@@ -116,6 +116,7 @@ document.getElementById('user-name').addEventListener('input', async (e) => {
     snapshot.forEach(doc => {
         const nombre = doc.data().userName;
         const curso  = doc.data().userCourse || "";
+        const phone  = doc.data().userPhone  || "";
         if (!vistos.has(nombre)) {
             vistos.add(nombre);
             const li = document.createElement('li');
@@ -123,6 +124,7 @@ document.getElementById('user-name').addEventListener('input', async (e) => {
             li.addEventListener('click', () => {
                 document.getElementById('user-name').value   = nombre;
                 document.getElementById('user-course').value = curso;
+                if (phone) document.getElementById('user-phone').value = phone;
                 lista.innerHTML = "";
             });
             lista.appendChild(li);
@@ -170,6 +172,7 @@ document.getElementById('copy-form').addEventListener('submit', async (e) => {
         userName:   nombre,
         userCourse: document.getElementById('user-course').value.trim(),
         userRole:   document.getElementById('user-role').value,
+        userPhone:  document.getElementById('user-phone').value.trim().replace(/[^0-9]/g, ''),
         amount:     monto,
         payMethod:  document.getElementById('pay-method').value,
         nota:       document.getElementById('nota-registro').value.trim(),
@@ -879,11 +882,13 @@ async function generarCierreMes() {
                     nombre: nombre.toUpperCase(),
                     curso:  d.userCourse || 'Sin curso',
                     role:   d.userRole   || 'Alumno',
+                    phone:  d.userPhone  || '',
                     saldo:  0
                 };
             }
-            // Actualizar rol si viene en este registro (el último gana)
-            if (d.userRole) mapa[nombre].role = d.userRole;
+            // Actualizar rol y teléfono si vienen en este registro
+            if (d.userRole)  mapa[nombre].role  = d.userRole;
+            if (d.userPhone) mapa[nombre].phone = d.userPhone;
             if (d.payMethod === "Debe")    mapa[nombre].saldo += Number(d.amount);
             if (d.payMethod === "Abono")   mapa[nombre].saldo -= Number(d.amount);
             if (d.payMethod === "A Favor") mapa[nombre].saldo -= Number(d.amount);
@@ -941,11 +946,15 @@ function renderizarCierreDeudores(lista) {
     }
 
     lista.forEach(u => {
-        const esProfesor = (u.role || '').toLowerCase() === 'profesor' || (u.role || '').toLowerCase() === 'docente';
+        const esProfesor = (u.role || '').toLowerCase() === 'profesor';
         const roleBadge  = esProfesor
             ? '<span style="font-size:0.7rem; background:#e8f0fe; color:#1a56db; border-radius:4px; padding:1px 6px; margin-left:6px;">👨‍🏫 Docente</span>'
             : '<span style="font-size:0.7rem; background:#f0fdf4; color:#166534; border-radius:4px; padding:1px 6px; margin-left:6px;">🎒 Alumno</span>';
-        const btnLabel   = esProfesor ? '📲 Avisar docente' : '📲 Avisar';
+        const tienePhone = u.phone && u.phone.length >= 8;
+        const btnLabel   = tienePhone
+            ? (esProfesor ? '📲 Avisar docente' : '📲 Avisar')
+            : (esProfesor ? '📲 Avisar docente ⚠️' : '📲 Avisar ⚠️');
+        const btnTitle   = tienePhone ? '' : 'title="Sin teléfono guardado — se pedirá una vez"';
         const div = document.createElement('div');
         div.className = 'deudor-item';
         div.innerHTML = `
@@ -956,7 +965,8 @@ function renderizarCierreDeudores(lista) {
             <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                 <span class="deudor-monto">$${u.saldo.toLocaleString('es-AR')}</span>
                 <div class="deudor-acciones">
-                    <button class="btn-wa-deudor" onclick="enviarAvisoWACierre('${u.nombre}', '${u.curso}', ${u.saldo}, '${u.role || 'Alumno'}')">
+                    <button class="btn-wa-deudor" ${btnTitle}
+                        onclick="enviarAvisoWACierre('${u.nombre}', '${u.curso}', ${u.saldo}, '${u.role || 'Alumno'}', '${u.phone || ''}')">
                         ${btnLabel}
                     </button>
                 </div>
@@ -974,11 +984,10 @@ function filtrarCierreDeudores() {
     renderizarCierreDeudores(filtrados);
 }
 
-// ── Enviar aviso WA desde el cierre — directo al número guardado ──
-// Diferencia alumno vs profesor con mensajes distintos.
-// El número se toma del campo userPhone del registro; si no hay,
-// se pide una sola vez con prompt y se guarda en memoria de sesión.
-const _telefonosSesion = {};   // cache temporal nombre → número
+// ── Enviar aviso WA desde el cierre ──
+// Si el número está guardado en Firebase → abre WhatsApp directo.
+// Si no está → lo pide UNA sola vez y lo recuerda para la sesión.
+const _telefonosSesion = {};
 
 const TEMPLATE_CIERRE_ALUMNO =
     'Hola! Le escribimos desde el Área TIC de la ESRN 135.\n\n'
@@ -989,37 +998,38 @@ const TEMPLATE_CIERRE_ALUMNO =
 
 const TEMPLATE_CIERRE_PROFESOR =
     'Hola! Le escribimos desde el Área TIC de la ESRN 135.\n\n'
-  + 'Le informamos que, en su carácter de docente, registra un saldo pendiente de *{saldo}* '
+  + 'Le informamos que registra un saldo pendiente de *{saldo}* '
   + 'en concepto de fotocopias correspondiente al cierre del período.\n\n'
   + 'Puede regularizarlo acercándose personalmente o transfiriendo al alias *esrn135*.\n\n'
-  + 'Desde ya, muchas gracias! 😊';
+  + '¡Muchas gracias! 😊';
 
-function enviarAvisoWACierre(nombre, curso, saldo, role) {
+function enviarAvisoWACierre(nombre, curso, saldo, role, phoneGuardado) {
     // 1. Elegir template según rol
-    const esProfesor = (role || '').toLowerCase() === 'profesor' || (role || '').toLowerCase() === 'docente';
+    const esProfesor = (role || '').toLowerCase() === 'profesor';
+    const templateEl = document.getElementById('cierre-wa-template');
     const templateBase = esProfesor ? TEMPLATE_CIERRE_PROFESOR : TEMPLATE_CIERRE_ALUMNO;
+    const template = (templateEl && templateEl.value.trim() !== TEMPLATE_CIERRE_DEFAULT)
+        ? templateEl.value.trim()
+        : templateBase;
 
-    // 2. Intentar usar el template personalizado del textarea (si fue editado)
-    const templateEl  = document.getElementById('cierre-wa-template');
-    const templateUso = (templateEl && templateEl.value.trim() !== TEMPLATE_CIERRE_DEFAULT)
-        ? templateEl.value.trim()   // el usuario editó el template manualmente
-        : templateBase;             // usar el que corresponde al rol
-
-    const saldoStr = '$' + saldo.toLocaleString('es-AR');
-    const msg = templateUso
+    const saldoStr = '$' + Number(saldo).toLocaleString('es-AR');
+    const msg = template
         .replace(/{nombre}/g, nombre)
         .replace(/{saldo}/g,  saldoStr)
         .replace(/{curso}/g,  curso || '');
 
-    // 3. Obtener número: primero cache de sesión, si no → prompt
-    let tel = _telefonosSesion[nombre] || '';
-    if (!tel) {
+    // 2. Resolver número: Firebase → cache sesión → prompt (última opción)
+    let tel = phoneGuardado || _telefonosSesion[nombre] || '';
+
+    if (!tel || tel.length < 8) {
         const quien = esProfesor ? 'del/la docente' : 'del padre/tutor de';
-        tel = prompt(`📲 Número de WhatsApp ${quien} ${nombre}\n(sin 0 ni 15, ej: 2920123456):`);
-        if (!tel) return;
-        tel = tel.trim().replace(/[^0-9]/g, '');
+        const ingresado = prompt(
+            `📲 No hay teléfono guardado para ${nombre}.\nIngresá el número ${quien} (sin 0 ni 15, ej: 2920123456):`
+        );
+        if (!ingresado) return;
+        tel = ingresado.trim().replace(/[^0-9]/g, '');
         if (tel.length < 8) { alert('Número inválido.'); return; }
-        _telefonosSesion[nombre] = tel;   // guardar para esta sesión
+        _telefonosSesion[nombre] = tel;   // recordar para esta sesión
     }
 
     window.open('https://wa.me/549' + tel + '?text=' + encodeURIComponent(msg), '_blank');
