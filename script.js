@@ -1029,57 +1029,6 @@ function enviarAviso(nombre, saldo, role) {
     // wa.me/?text= abre el selector de chat de WhatsApp (sin número hardcodeado)
     window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
 }
-//aca cierra cambio
-// ── Enviar aviso WA desde el cierre ──
-// Si el número está guardado en Firebase → abre WhatsApp directo.
-// Si no está → lo pide UNA sola vez y lo recuerda para la sesión.
-const _telefonosSesion = {};
-
-const TEMPLATE_CIERRE_ALUMNO =
-    'Hola! Le escribimos desde el Área TIC de la ESRN 135.\n\n'
-  + 'Le informamos que *{nombre}* tiene un saldo pendiente de *{saldo}* '
-  + 'en concepto de fotocopias correspondiente al cierre del período.\n\n'
-  + 'Pueden acercarse a regularizarlo o transferir al alias *esrn135* '
-  + 'y enviarnos el comprobante.\n\n¡Muchas gracias! 😊';
-
-const TEMPLATE_CIERRE_PROFESOR =
-    'Hola! Le escribimos desde el Área TIC de la ESRN 135.\n\n'
-  + 'Le informamos que registra un saldo pendiente de *{saldo}* '
-  + 'en concepto de fotocopias correspondiente al cierre del período.\n\n'
-  + 'Puede regularizarlo acercándose personalmente o transfiriendo al alias *esrn135*.\n\n'
-  + '¡Muchas gracias! 😊';
-
-function enviarAvisoWACierre(nombre, curso, saldo, role, phoneGuardado) {
-    // 1. Elegir template según rol
-    const esProfesor = (role || '').toLowerCase() === 'profesor';
-    const templateEl = document.getElementById('cierre-wa-template');
-    const templateBase = esProfesor ? TEMPLATE_CIERRE_PROFESOR : TEMPLATE_CIERRE_ALUMNO;
-    const template = (templateEl && templateEl.value.trim() !== TEMPLATE_CIERRE_DEFAULT)
-        ? templateEl.value.trim()
-        : templateBase;
-
-    const saldoStr = '$' + Number(saldo).toLocaleString('es-AR');
-    const msg = template
-        .replace(/{nombre}/g, nombre)
-        .replace(/{saldo}/g,  saldoStr)
-        .replace(/{curso}/g,  curso || '');
-
-    // 2. Resolver número: Firebase → cache sesión → prompt (última opción)
-    let tel = phoneGuardado || _telefonosSesion[nombre] || '';
-
-    if (!tel || tel.length < 8) {
-        const quien = esProfesor ? 'del/la docente' : 'del padre/tutor de';
-        const ingresado = prompt(
-            `📲 No hay teléfono guardado para ${nombre}.\nIngresá el número ${quien} (sin 0 ni 15, ej: 2920123456):`
-        );
-        if (!ingresado) return;
-        tel = ingresado.trim().replace(/[^0-9]/g, '');
-        if (tel.length < 8) { alert('Número inválido.'); return; }
-        _telefonosSesion[nombre] = tel;   // recordar para esta sesión
-    }
-
-    window.open('https://wa.me/549' + tel + '?text=' + encodeURIComponent(msg), '_blank');
-}
 
 function exportarCierreCSV() {
     if (_cierreDeudoresData.length === 0) { alert('Generá el cierre primero.'); return; }
