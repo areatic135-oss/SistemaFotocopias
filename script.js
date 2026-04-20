@@ -878,9 +878,12 @@ async function generarCierreMes() {
                 mapa[nombre] = {
                     nombre: nombre.toUpperCase(),
                     curso:  d.userCourse || 'Sin curso',
+                    role:   d.userRole   || 'Alumno',
                     saldo:  0
                 };
             }
+            // Actualizar rol si viene en este registro (el último gana)
+            if (d.userRole) mapa[nombre].role = d.userRole;
             if (d.payMethod === "Debe")    mapa[nombre].saldo += Number(d.amount);
             if (d.payMethod === "Abono")   mapa[nombre].saldo -= Number(d.amount);
             if (d.payMethod === "A Favor") mapa[nombre].saldo -= Number(d.amount);
@@ -938,18 +941,23 @@ function renderizarCierreDeudores(lista) {
     }
 
     lista.forEach(u => {
+        const esProfesor = (u.role || '').toLowerCase() === 'profesor' || (u.role || '').toLowerCase() === 'docente';
+        const roleBadge  = esProfesor
+            ? '<span style="font-size:0.7rem; background:#e8f0fe; color:#1a56db; border-radius:4px; padding:1px 6px; margin-left:6px;">👨‍🏫 Docente</span>'
+            : '<span style="font-size:0.7rem; background:#f0fdf4; color:#166534; border-radius:4px; padding:1px 6px; margin-left:6px;">🎒 Alumno</span>';
+        const btnLabel   = esProfesor ? '📲 Avisar docente' : '📲 Avisar';
         const div = document.createElement('div');
         div.className = 'deudor-item';
         div.innerHTML = `
             <div>
-                <div class="deudor-nombre">${u.nombre}</div>
+                <div class="deudor-nombre">${u.nombre}${roleBadge}</div>
                 <div class="deudor-info">${u.curso}</div>
             </div>
             <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                 <span class="deudor-monto">$${u.saldo.toLocaleString('es-AR')}</span>
                 <div class="deudor-acciones">
-                    <button class="btn-wa-deudor" onclick="enviarAvisoWACierre('${u.nombre}', '${u.curso}', ${u.saldo})">
-                        📲 Avisar
+                    <button class="btn-wa-deudor" onclick="enviarAvisoWACierre('${u.nombre}', '${u.curso}', ${u.saldo}, '${u.role || 'Alumno'}')">
+                        ${btnLabel}
                     </button>
                 </div>
             </div>
@@ -966,22 +974,55 @@ function filtrarCierreDeudores() {
     renderizarCierreDeudores(filtrados);
 }
 
-// ── Enviar aviso WA desde el cierre (número del padre/docente) ──
-function enviarAvisoWACierre(nombre, curso, saldo) {
-    const template = document.getElementById('cierre-wa-template').value.trim();
+// ── Enviar aviso WA desde el cierre — directo al número guardado ──
+// Diferencia alumno vs profesor con mensajes distintos.
+// El número se toma del campo userPhone del registro; si no hay,
+// se pide una sola vez con prompt y se guarda en memoria de sesión.
+const _telefonosSesion = {};   // cache temporal nombre → número
+
+const TEMPLATE_CIERRE_ALUMNO =
+    'Hola! Le escribimos desde el Área TIC de la ESRN 135.\n\n'
+  + 'Le informamos que *{nombre}* tiene un saldo pendiente de *{saldo}* '
+  + 'en concepto de fotocopias correspondiente al cierre del período.\n\n'
+  + 'Pueden acercarse a regularizarlo o transferir al alias *esrn135* '
+  + 'y enviarnos el comprobante.\n\n¡Muchas gracias! 😊';
+
+const TEMPLATE_CIERRE_PROFESOR =
+    'Hola! Le escribimos desde el Área TIC de la ESRN 135.\n\n'
+  + 'Le informamos que, en su carácter de docente, registra un saldo pendiente de *{saldo}* '
+  + 'en concepto de fotocopias correspondiente al cierre del período.\n\n'
+  + 'Puede regularizarlo acercándose personalmente o transfiriendo al alias *esrn135*.\n\n'
+  + 'Desde ya, muchas gracias! 😊';
+
+function enviarAvisoWACierre(nombre, curso, saldo, role) {
+    // 1. Elegir template según rol
+    const esProfesor = (role || '').toLowerCase() === 'profesor' || (role || '').toLowerCase() === 'docente';
+    const templateBase = esProfesor ? TEMPLATE_CIERRE_PROFESOR : TEMPLATE_CIERRE_ALUMNO;
+
+    // 2. Intentar usar el template personalizado del textarea (si fue editado)
+    const templateEl  = document.getElementById('cierre-wa-template');
+    const templateUso = (templateEl && templateEl.value.trim() !== TEMPLATE_CIERRE_DEFAULT)
+        ? templateEl.value.trim()   // el usuario editó el template manualmente
+        : templateBase;             // usar el que corresponde al rol
+
     const saldoStr = '$' + saldo.toLocaleString('es-AR');
-    const msg = template
+    const msg = templateUso
         .replace(/{nombre}/g, nombre)
-        .replace(/{saldo}/g, saldoStr);
+        .replace(/{saldo}/g,  saldoStr)
+        .replace(/{curso}/g,  curso || '');
 
-    const tel = prompt(
-        `📲 Número de WhatsApp para ${nombre}\n(sin 0 ni 15, ej: 2920123456):`
-    );
-    if (!tel) return;
-    const telLimpio = tel.trim().replace(/[^0-9]/g, '');
-    if (telLimpio.length < 8) { alert('Número inválido.'); return; }
+    // 3. Obtener número: primero cache de sesión, si no → prompt
+    let tel = _telefonosSesion[nombre] || '';
+    if (!tel) {
+        const quien = esProfesor ? 'del/la docente' : 'del padre/tutor de';
+        tel = prompt(`📲 Número de WhatsApp ${quien} ${nombre}\n(sin 0 ni 15, ej: 2920123456):`);
+        if (!tel) return;
+        tel = tel.trim().replace(/[^0-9]/g, '');
+        if (tel.length < 8) { alert('Número inválido.'); return; }
+        _telefonosSesion[nombre] = tel;   // guardar para esta sesión
+    }
 
-    window.open('https://wa.me/549' + telLimpio + '?text=' + encodeURIComponent(msg), '_blank');
+    window.open('https://wa.me/549' + tel + '?text=' + encodeURIComponent(msg), '_blank');
 }
 
 function exportarCierreCSV() {
