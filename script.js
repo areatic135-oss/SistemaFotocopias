@@ -139,9 +139,10 @@ document.getElementById('user-name').addEventListener('input', async (e) => {
         let balance = 0;
         snapSaldo.forEach(d => {
             const data = d.data();
-            if (data.payMethod === "Debe")    balance += Number(data.amount);
-            if (data.payMethod === "Abono")   balance -= Number(data.amount);
-            if (data.payMethod === "A Favor") balance -= Number(data.amount);
+            if (data.payMethod === "Debe")      balance += Number(data.amount);
+            if (data.payMethod === "Abono")     balance -= Number(data.amount);
+            if (data.payMethod === "A Favor")   balance -= Number(data.amount);
+            if (data.payMethod === "Descuento") balance += Number(data.amount);
         });
         const saldoFavor = Math.max(0, -balance);
         const badge = document.getElementById('badge-saldo-favor-registro');
@@ -164,27 +165,109 @@ document.getElementById('copy-form').addEventListener('submit', async (e) => {
 
     const nombre = document.getElementById('user-name').value.trim().toLowerCase();
     const monto  = parseFloat(document.getElementById('custom-amount').value);
+    const payMethod = document.getElementById('pay-method').value;
 
     if (!nombre)                     { alert("Ingresá el nombre del usuario."); return; }
     if (isNaN(monto) || monto <= 0) { alert("Ingresá un monto válido."); return; }
 
-    const datos = {
-        userName:   nombre,
-        userCourse: document.getElementById('user-course').value.trim(),
-        userRole:   document.getElementById('user-role').value,
-        userPhone:  document.getElementById('user-phone').value.trim().replace(/[^0-9]/g, ''),
-        amount:     monto,
-        payMethod:  document.getElementById('pay-method').value,
-        nota:       document.getElementById('nota-registro').value.trim(),
-        fecha:      firebase.firestore.FieldValue.serverTimestamp()
-    };
-
     try {
-        await db.collection("fotocopias").add(datos);
-        alert("✅ Movimiento registrado.");
+        // SOLO si es "Debe" (fotocopia sin pagar), aplicar descuento automático de saldo a favor
+        if (payMethod === "Debe") {
+            // Obtener todos los movimientos del usuario
+            const snapUsuario = await db.collection("fotocopias")
+                .where("userName", "==", nombre)
+                .get();
+            
+            // Calcular balance actual
+            let balanceTotal = 0;
+            snapUsuario.forEach(doc => {
+                const d = doc.data();
+                if (d.payMethod === "Debe")      balanceTotal += Number(d.amount);
+                if (d.payMethod === "Abono")     balanceTotal -= Number(d.amount);
+                if (d.payMethod === "A Favor")   balanceTotal -= Number(d.amount);
+                if (d.payMethod === "Descuento") balanceTotal += Number(d.amount);
+            });
+            
+            // Saldo a favor es cuando el balance es negativo
+            const saldoAFavor = Math.max(0, -balanceTotal);
+            
+            console.log(`DEBUG: Usuario ${nombre}, balance actual: ${balanceTotal}, saldo a favor: ${saldoAFavor}, monto: ${monto}`);
+            
+            // Si hay saldo a favor, descontarlo del monto a registrar
+            if (saldoAFavor > 0) {
+                const montoDescontado = Math.min(saldoAFavor, monto);
+                const montoDeuda = monto - montoDescontado;
+                
+                console.log(`DEBUG: Descontando ${montoDescontado} del saldo a favor, nueva deuda: ${montoDeuda}`);
+                
+                // Registrar el descuento del saldo a favor
+                if (montoDescontado > 0) {
+                    await db.collection("fotocopias").add({
+                        userName:   nombre,
+                        userCourse: document.getElementById('user-course').value.trim(),
+                        userRole:   document.getElementById('user-role').value,
+                        userPhone:  document.getElementById('user-phone').value.trim().replace(/[^0-9]/g, ''),
+                        amount:     montoDescontado,
+                        payMethod:  "Descuento",
+                        nota:       "Descuento automático de saldo a favor",
+                        fecha:      firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    console.log(`DEBUG: Registrado DESCUENTO por ${montoDescontado}`);
+                }
+                
+                // Registrar la deuda pendiente (si hay)
+                if (montoDeuda > 0) {
+                    await db.collection("fotocopias").add({
+                        userName:   nombre,
+                        userCourse: document.getElementById('user-course').value.trim(),
+                        userRole:   document.getElementById('user-role').value,
+                        userPhone:  document.getElementById('user-phone').value.trim().replace(/[^0-9]/g, ''),
+                        amount:     montoDeuda,
+                        payMethod:  "Debe",
+                        nota:       document.getElementById('nota-registro').value.trim(),
+                        fecha:      firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    console.log(`DEBUG: Registrado DEBE por ${montoDeuda}`);
+                }
+                
+                alert(`✅ Movimiento registrado.\n\n📊 Desglose:\n💚 Saldo a favor descontado: $${montoDescontado.toLocaleString('es-AR')}\n📝 Nueva deuda: $${montoDeuda.toLocaleString('es-AR')}`);
+            } else {
+                // Sin saldo a favor, registrar normalmente como deuda
+                await db.collection("fotocopias").add({
+                    userName:   nombre,
+                    userCourse: document.getElementById('user-course').value.trim(),
+                    userRole:   document.getElementById('user-role').value,
+                    userPhone:  document.getElementById('user-phone').value.trim().replace(/[^0-9]/g, ''),
+                    amount:     monto,
+                    payMethod:  "Debe",
+                    nota:       document.getElementById('nota-registro').value.trim(),
+                    fecha:      firebase.firestore.FieldValue.serverTimestamp()
+                });
+                console.log(`DEBUG: Sin saldo a favor, registrado DEBE por ${monto}`);
+                alert("✅ Movimiento registrado.");
+            }
+        } else {
+            // Para otros métodos (Efectivo, Transferencia, Abono, A Favor), registrar directamente
+            const datos = {
+                userName:   nombre,
+                userCourse: document.getElementById('user-course').value.trim(),
+                userRole:   document.getElementById('user-role').value,
+                userPhone:  document.getElementById('user-phone').value.trim().replace(/[^0-9]/g, ''),
+                amount:     monto,
+                payMethod:  payMethod,
+                nota:       document.getElementById('nota-registro').value.trim(),
+                fecha:      firebase.firestore.FieldValue.serverTimestamp()
+            };
+            
+            await db.collection("fotocopias").add(datos);
+            console.log(`DEBUG: Registrado ${payMethod} por ${monto}`);
+            alert("✅ Movimiento registrado.");
+        }
+        
         document.getElementById('copy-form').reset();
         calcularCajaDelDia();
     } catch (error) {
+        console.error("ERROR:", error);
         alert("Error al guardar: " + error.message);
     }
 });
@@ -248,9 +331,10 @@ document.getElementById('search-input').addEventListener('input', async (e) => {
         if (!usuarios[d.userName]) {
             usuarios[d.userName] = { curso: d.userCourse || "", balance: 0 };
         }
-        if (d.payMethod === "Debe")    usuarios[d.userName].balance += Number(d.amount);
-        if (d.payMethod === "Abono")   usuarios[d.userName].balance -= Number(d.amount);
-        if (d.payMethod === "A Favor") usuarios[d.userName].balance -= Number(d.amount);
+        if (d.payMethod === "Debe")      usuarios[d.userName].balance += Number(d.amount);
+        if (d.payMethod === "Abono")     usuarios[d.userName].balance -= Number(d.amount);
+        if (d.payMethod === "A Favor")   usuarios[d.userName].balance -= Number(d.amount);
+        if (d.payMethod === "Descuento") usuarios[d.userName].balance += Number(d.amount);
     });
 
     Object.entries(usuarios).forEach(([nombre, info]) => {
@@ -321,9 +405,10 @@ function cargarPerfilUsuario(nombre, curso, balanceInicial) {
             let balanceActual = 0;
             snapshot.forEach(doc => {
                 const d = doc.data();
-                if (d.payMethod === "Debe")    balanceActual += Number(d.amount);
-                if (d.payMethod === "Abono")   balanceActual -= Number(d.amount);
-                if (d.payMethod === "A Favor") balanceActual -= Number(d.amount);
+                if (d.payMethod === "Debe")      balanceActual += Number(d.amount);
+                if (d.payMethod === "Abono")     balanceActual -= Number(d.amount);
+                if (d.payMethod === "A Favor")   balanceActual -= Number(d.amount);
+                if (d.payMethod === "Descuento") balanceActual += Number(d.amount);
             });
 
             actualizarSaldoUI(balanceActual);
@@ -352,7 +437,7 @@ function renderizarMovimientos(tab) {
     const filtrados = _perfilDocs.filter(doc => {
         const m = doc.data().payMethod;
         if (tab === 'deudas') return m === 'Debe';
-        if (tab === 'abonos') return m === 'Abono';
+        if (tab === 'abonos') return m === 'Abono' || m === 'Descuento';
         if (tab === 'favor')  return m === 'A Favor';
         return true;
     });
@@ -366,7 +451,7 @@ function renderizarMovimientos(tab) {
         const fecha = d.fecha ? new Date(d.fecha.seconds * 1000).toLocaleDateString('es-AR') : '---';
         const css   = obtenerCSS(d.payMethod);
         const color = d.payMethod === 'Debe' ? 'var(--red)' : 'var(--green)';
-        const signo = (d.payMethod === 'Abono' || d.payMethod === 'A Favor') ? '+' : '';
+        const signo = (d.payMethod === 'Abono' || d.payMethod === 'A Favor' || d.payMethod === 'Descuento') ? '+' : '';
         const div   = document.createElement('div');
         div.className = 'mov-item';
         div.innerHTML =
@@ -820,12 +905,13 @@ function calcularEstadisticas() {
         document.getElementById('stat-mes').textContent = '$' + recaudadoMes.toLocaleString('es-AR');
     });
 
-    db.collection("fotocopias").where("payMethod", "in", ["Debe", "Abono"]).onSnapshot((snapshot) => {
+    db.collection("fotocopias").where("payMethod", "in", ["Debe", "Abono", "A Favor"]).onSnapshot((snapshot) => {
         let total = 0;
         snapshot.forEach(doc => {
             const d = doc.data();
-            if (d.payMethod === "Debe")  total += Number(d.amount);
-            if (d.payMethod === "Abono") total -= Number(d.amount);
+            if (d.payMethod === "Debe")    total += Number(d.amount);
+            if (d.payMethod === "Abono")   total -= Number(d.amount);
+            if (d.payMethod === "A Favor") total -= Number(d.amount);
         });
         document.getElementById('stat-deuda').textContent = '$' + Math.max(0, total).toLocaleString('es-AR');
     });
@@ -1261,6 +1347,7 @@ function obtenerCSS(metodo) {
         case "Transferencia": return "metodo-transfer";
         case "Abono":         return "metodo-abono";
         case "A Favor":       return "metodo-favor";
+        case "Descuento":     return "metodo-abono";
         default:              return "";
     }
 }
